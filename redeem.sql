@@ -35,4 +35,29 @@ end $$;
 -- 3. 权限
 grant execute on function public.pk_code_redeem(text, text, text) to anon, authenticated;
 
+-- 4. 顶栏私信提醒：每个给我发过私信的人，取最新一条（最多 20 人）
+create or replace function public.pk_dm_latest(p_uid text, p_token text)
+returns table(mid bigint, sender text, nickname text, avatar text, gender text, vip boolean, body text, created_at timestamptz)
+language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from pk_players tb where tb.uid = p_uid and tb.token = p_token) then
+    return;
+  end if;
+  return query
+    with mine as (
+      select d2.sender as s_uid, max(d2.id) as mx
+        from pk_dms d2
+       where d2.receiver = pk_dm_latest.p_uid
+       group by d2.sender
+    )
+    select d.id, d.sender, pl.nickname, pl.avatar, pl.gender, pl.vip, d.body, d.created_at
+      from mine m
+      join pk_dms d on d.id = m.mx
+      join pk_players pl on pl.uid = m.s_uid
+     order by d.id desc
+     limit 20;
+end $$;
+
+grant execute on function public.pk_dm_latest(text, text) to anon, authenticated;
+
 -- 完成
