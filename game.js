@@ -1184,6 +1184,29 @@
     ta.remove();
     return ok;
   }
+  function installSheet() {
+    const ua = navigator.userAgent;
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+    const inWx = /MicroMessenger/i.test(ua);
+    const inWxHint = inWx ? `<p class="muted tiny">⚠️ 你现在在微信里打开：先点右上角「···」→ 选择「在浏览器 / Safari 中打开」，再按下面步骤做。</p>` : '';
+    const steps = isIOS
+      ? ['用 Safari 打开这个游戏（微信里请先「在 Safari 中打开」）',
+         '点屏幕底部中间的「分享」按钮（方框加个箭头 ↑）',
+         '在弹出的列表里找到「添加到主屏幕」',
+         '点右上角「添加」，桌面上就有快乐佩奇的图标啦']
+      : ['用 Chrome 浏览器打开这个游戏（微信里请先「在浏览器中打开」）',
+         '点屏幕右上角的「⋮」三个点菜单',
+         '在菜单里找到「添加到主屏幕」或「安装应用」',
+         '点「添加」，桌面上就有快乐佩奇的图标啦'];
+    sheet(`<h3>📲 安装到手机桌面</h3>
+      <p class="sheet-sub">装好以后不用再找链接，点桌面的图标直接进游戏</p>
+      ${inWxHint}
+      <div class="rule-list">
+        ${steps.map((s, i) => `<p><b>${i + 1}.</b> ${s}</p>`).join('')}
+      </div>
+      <button class="btn btn-primary btn-lg" style="margin-top:14px" onclick="document.querySelector('.sheet-mask').remove()">记住啦</button>`);
+  }
+
   function serviceSheet() {
     const wxid = 'z849998116';
     sheet(`<h3>💬 联系客服</h3>
@@ -1274,13 +1297,17 @@
     $$('.tab').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.tab; render(); window.scrollTo(0, 0); }));
     $('#nickBtn').addEventListener('click', openNickEdit);
     $('#menuBtn').addEventListener('click', () => {
+      const installed = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
       sheet(`<h3>${esc(S.nickname || '我')} 的菜单</h3>
         <p class="sheet-sub">复制链接给朋友，或管理当前账号</p>
         <div class="menu-list">
+          ${installed ? '' : `<button class="menu-row" id="mInstall"><span>📲</span><div><b>安装到手机桌面</b><small>像 App 一样点图标就打开</small></div></button>`}
           <button class="menu-row" id="mService"><span>💬</span><div><b>联系客服</b><small>加微信，问题随时找我</small></div></button>
           <button class="menu-row" id="mCopy"><span>🔗</span><div><b>复制链接</b><small>粘贴到聊天框就能打开</small></div></button>
           <button class="menu-row danger" id="mLogout"><span>🚪</span><div><b>退出登录</b><small>记录会保留，可重新登录</small></div></button>
         </div>`);
+      const mi = $('#mInstall');
+      if (mi) mi.onclick = installSheet;
       $('#mService').onclick = serviceSheet;
       $('#mCopy').onclick = copyLink;
       $('#mLogout').onclick = logout;
