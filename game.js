@@ -115,7 +115,7 @@
 
   /* ---------------- 健康恢复 ---------------- */
   const SMOKE_HEALTH = [['气色', 60], ['抽烟习惯', 90], ['味觉与嗅觉', 150], ['烟瘾', 300], ['抵抗力', 1000], ['循环代谢', 3000]];
-  const ALCOHOL_HEALTH = [['身体代谢', 60], ['气色', 90], ['精力状态', 150], ['酒瘾', 300], ['睡眠与专注', 1000], ['最强脑力状态', 3000]];
+  const ALCOHOL_HEALTH = [['身体代谢', 60], ['气色', 90], ['精力状态', 150], ['酒瘾', 300], ['睡眠与专注', 1000], ['脑力状态', 3000]];
   function elapsedDays(started) { return started ? (Date.now() - started) / 86400000 : 0; }
   function pctText(p) {
     if (p <= 0) return '0%';
@@ -1620,6 +1620,7 @@
       <div class="chat-top">
         <button class="chat-back" id="dmBack">←</button>
         <div class="chat-title">${esc(peer.avatar || '🐣')} ${esc(peer.nickname)}</div>
+        <button class="chat-menu" id="dmDel" title="删除聊天">🗑</button>
       </div>
       <div class="chat-body" id="dmBody"><p class="muted tiny" style="text-align:center">加载中…</p></div>
       <div class="chat-input">
@@ -1651,6 +1652,28 @@
     await load();
     dmTimer = setInterval(load, 4000);
     $('#dmBack').onclick = () => { clearInterval(dmTimer); dmTimer = null; ov.remove(); };
+    /* 删除聊天（二次确认，云端清空，双方都看不到） */
+    $('#dmDel').onclick = () => {
+      sheet(`<h3>🗑 删除聊天</h3>
+        <p class="sheet-sub">删除后和「${esc(peer.nickname)}」的这些聊天记录会清空，双方都看不到。确定要删吗？</p>
+        <div class="sheet-actions">
+          <button class="btn btn-ghost" id="dmDelNo">再想想</button>
+          <button class="btn btn-primary" id="dmDelYes">确认删除</button>
+        </div>`);
+      $('#dmDelNo').onclick = closeSheet;
+      $('#dmDelYes').onclick = async () => {
+        try {
+          const r = await sbRpc('pk_dm_clear', { p_uid: c.uid, p_token: c.token, p_with: peer.uid });
+          if (r && r.ok) {
+            if (S.dmRead && S.dmRead[peer.uid] !== undefined) { delete S.dmRead[peer.uid]; persist(); }
+            clearInterval(dmTimer); dmTimer = null;
+            closeSheet(); ov.remove();
+            dmCheck();
+            toast('聊天已删除', '🗑');
+          } else { closeSheet(); toast('没删掉，再试一次', '⚠️'); }
+        } catch (err) { closeSheet(); toast('网络不太顺，再试一次', '📡'); }
+      };
+    };
     const send = async () => {
       const el = $('#dmText');
       const t = el.value.trim();
@@ -1685,8 +1708,11 @@
     if (p.fit_days) t.push('🏃 ' + p.fit_days + ' 天');
     return `<div class="fr-row">
       <span class="fr-ava">${esc(p.avatar || '🐣')}</span>
-      <div class="fr-info">${nameHtml(p)}<small>${genderMark(p.gender)} ${t.length ? t.join(' · ') : '还没开始打卡'}</small></div>
-      ${act}</div>`;
+      <div class="fr-main">
+        <div class="fr-line1">${nameHtml(p)}${act || ''}</div>
+        <div class="fr-days">${genderMark(p.gender)} ${t.length ? t.join('　') : '<span>还没开始打卡</span>'}</div>
+      </div>
+    </div>`;
   }
 
   async function friendsSheet() {
@@ -2046,7 +2072,7 @@
     /* 顶部积分徽章已移除（挡住昵称和 VIP 标识） */
     const nb = $('#nickBtn');
     if (nb) {
-      nb.innerHTML = (S.nickname || '未命名') + (vipOn() ? ' <span class="vip-mini">VIP</span>' : '');
+      nb.innerHTML = `<span class="nk-t">${esc(S.nickname || '未命名')}</span>` + (vipOn() ? ' <span class="vip-mini">VIP</span>' : '');
       nb.classList.toggle('vip-name', vipOn());
       nb.title = '点击修改昵称';
     }
@@ -2074,7 +2100,7 @@
       closeSheet();
       const nb2 = $('#nickBtn');
       if (nb2) {
-        nb2.innerHTML = (S.nickname || '未命名') + (vipOn() ? ' <span class="vip-mini">VIP</span>' : '');
+        nb2.innerHTML = `<span class="nk-t">${esc(S.nickname || '未命名')}</span>` + (vipOn() ? ' <span class="vip-mini">VIP</span>' : '');
         nb2.classList.toggle('vip-name', vipOn());
       }
       toast('昵称已更新', '✏️');
