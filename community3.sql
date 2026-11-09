@@ -87,19 +87,24 @@ begin
      order by fr.created_at desc;
 end $$;
 
--- 6. 社区成员表
-create table if not exists public.pk_members (
-  uid       text primary key,
+-- 6. 社区成员表（三个群独立：module = smoke 戒烟群 / alcohol 戒酒群 / fit 运动群，一人可同时加入三个群）
+drop table if exists public.pk_members cascade;
+create table public.pk_members (
+  module    text not null default 'smoke',
+  uid       text not null,
   nickname  text not null,
   avatar    text default '🐣',
   gender    text default '',
   vip       boolean default false,
-  joined_at timestamptz default now()
+  joined_at timestamptz default now(),
+  primary key (module, uid)
 );
 
--- 7. 群聊消息表
-create table if not exists public.pk_chat (
+-- 7. 群聊消息表（按群分开存）
+drop table if exists public.pk_chat cascade;
+create table public.pk_chat (
   id         bigserial primary key,
+  module     text not null default 'smoke',
   uid        text not null,
   nickname   text not null,
   avatar     text default '🐣',
@@ -126,8 +131,8 @@ create table if not exists public.pk_blocks (
   unique (owner_uid, blocked_uid)
 );
 
--- 10. 加入社区
-create or replace function public.pk_join_community(p_uid text, p_token text)
+-- 10. 加入社区（p_module：smoke 戒烟群 / alcohol 戒酒群 / fit 运动群）
+create or replace function public.pk_join_community(p_uid text, p_token text, p_module text)
 returns json
 language plpgsql security definer set search_path = public as $$
 declare rec pk_players%rowtype;
@@ -136,36 +141,43 @@ begin
   if not found then
     return json_build_object('ok', false, 'err', 'bad_token');
   end if;
-  insert into pk_members(uid, nickname, avatar, gender, vip)
-  values (p_uid, rec.nickname, rec.avatar, coalesce(rec.gender, ''), coalesce(rec.vip, false))
-  on conflict (uid) do nothing;
+  if p_module not in ('smoke', 'alcohol', 'fit') then
+    p_module := 'smoke';
+  end if;
+  insert into pk_members(module, uid, nickname, avatar, gender, vip)
+  values (p_module, p_uid, rec.nickname, rec.avatar, coalesce(rec.gender, ''), coalesce(rec.vip, false))
+  on conflict (module, uid) do nothing;
   return json_build_object('ok', true);
 end $$;
 
--- 11. 退出社区
-create or replace function public.pk_leave_community(p_uid text, p_token text)
+-- 11. 退出社区（只退当前这一个群）
+create or replace function public.pk_leave_community(p_uid text, p_token text, p_module text)
 returns json
 language plpgsql security definer set search_path = public as $$
 begin
   if not exists (select 1 from pk_players tb where tb.uid = p_uid and tb.token = p_token) then
     return json_build_object('ok', false, 'err', 'bad_token');
   end if;
-  delete from pk_members where uid = p_uid;
+  if p_module not in ('smoke', 'alcohol', 'fit') then
+    p_module := 'smoke';
+  end if;
+  delete from pk_members where module = p_module and uid = p_uid;
   return json_build_object('ok', true);
 end $$;
 
 -- 12. 社区成员列表（只给昵称头像性别VIP，不给打卡天数）
-create or replace function public.pk_member_list()
+create or replace function public.pk_member_list(p_module text)
 returns table(uid text, nickname text, avatar text, gender text, vip boolean, joined_at timestamptz)
 language sql security definer set search_path = public as $$
   select m.uid, m.nickname, m.avatar, m.gender, m.vip, m.joined_at
     from pk_members m
+   where m.module = coalesce(p_module, 'smoke')
    order by m.joined_at asc
    limit 300;
 $$;
 
 -- 13. 群聊发言
-create or replace function public.pk_chat_send(p_uid text, p_token text, p_body text)
+create or replace function public.pk_chat_send(p_uid text, p_token text, p_module text, p_body text)
 returns json
 language plpgsql security definer set search_path = public as $$
 declare rec pk_players%rowtype;
@@ -174,26 +186,29 @@ begin
   if not found then
     return json_build_object('ok', false, 'err', 'bad_token');
   end if;
-  if not exists (select 1 from pk_members mb where mb.uid = p_uid) then
+  if p_module not in ('smoke', 'alcohol', 'fit') then
+    p_module := 'smoke';
+  end if;
+  if not exists (select 1 from pk_members mb where mb.uid = p_uid and mb.module = p_module) then
     return json_build_object('ok', false, 'err', 'not_member');
   end if;
   if p_body is null or length(trim(p_body)) = 0 or length(p_body) > 200 then
     return json_build_object('ok', false, 'err', 'bad_body');
   end if;
-  insert into pk_chat(uid, nickname, avatar, gender, vip, body)
-  values (p_uid, rec.nickname, rec.avatar, coalesce(rec.gender, ''), coalesce(rec.vip, false), trim(p_body));
+  insert into pk_chat(module, uid, nickname, avatar, gender, vip, body)
+  values (p_module, p_uid, rec.nickname, rec.avatar, coalesce(rec.gender, ''), coalesce(rec.vip, false), trim(p_body));
   -- 顺手清理 3 天前的旧消息，防止表无限变大
   delete from pk_chat where created_at < now() - interval '3 days';
   return json_build_object('ok', true);
 end $$;
 
 -- 14. 读群聊最近消息
-create or replace function public.pk_chat_fetch(p_since bigint default 0)
+create or replace function public.pk_chat_fetch(p_module text, p_since bigint default 0)
 returns table(mid bigint, uid text, nickname text, avatar text, gender text, vip boolean, body text, created_at timestamptz)
 language sql security definer set search_path = public as $$
   select c.id, c.uid, c.nickname, c.avatar, c.gender, c.vip, c.body, c.created_at
     from pk_chat c
-   where c.id > coalesce(p_since, 0)
+   where c.module = coalesce(p_module, 'smoke') and c.id > coalesce(p_since, 0)
    order by c.id desc
    limit 60;
 $$;
@@ -283,11 +298,11 @@ grant execute on function public.pk_search(text) to anon, authenticated;
 grant execute on function public.pk_my_friends(text, text) to anon, authenticated;
 grant execute on function public.pk_add_friend(text, text, text) to anon, authenticated;
 grant execute on function public.pk_del_friend(text, text, text) to anon, authenticated;
-grant execute on function public.pk_join_community(text, text) to anon, authenticated;
-grant execute on function public.pk_leave_community(text, text) to anon, authenticated;
-grant execute on function public.pk_member_list() to anon, authenticated;
-grant execute on function public.pk_chat_send(text, text, text) to anon, authenticated;
-grant execute on function public.pk_chat_fetch(bigint) to anon, authenticated;
+grant execute on function public.pk_join_community(text, text, text) to anon, authenticated;
+grant execute on function public.pk_leave_community(text, text, text) to anon, authenticated;
+grant execute on function public.pk_member_list(text) to anon, authenticated;
+grant execute on function public.pk_chat_send(text, text, text, text) to anon, authenticated;
+grant execute on function public.pk_chat_fetch(text, bigint) to anon, authenticated;
 grant execute on function public.pk_dm_send(text, text, text, text) to anon, authenticated;
 grant execute on function public.pk_dm_fetch(text, text, text) to anon, authenticated;
 grant execute on function public.pk_block(text, text, text) to anon, authenticated;
