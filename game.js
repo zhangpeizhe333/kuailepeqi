@@ -107,8 +107,8 @@
   }
 
   /* ---------------- 健康恢复 ---------------- */
-  const SMOKE_HEALTH = [['味觉与气色', 60], ['抽烟习惯', 90], ['嗅觉', 150], ['想烟的念头', 300], ['抵抗力', 1000], ['循环与气色', 3000]];
-  const ALCOHOL_HEALTH = [['身体代谢', 60], ['饮酒习惯', 90], ['精力状态', 150], ['想酒的念头', 300], ['睡眠与专注', 1000], ['长期状态', 3000]];
+  const SMOKE_HEALTH = [['气色', 60], ['抽烟习惯', 90], ['味觉与嗅觉', 150], ['烟瘾', 300], ['抵抗力', 1000], ['循环代谢', 3000]];
+  const ALCOHOL_HEALTH = [['身体代谢', 60], ['气色', 90], ['精力状态', 150], ['酒瘾', 300], ['睡眠与专注', 1000], ['最强脑力状态', 3000]];
   function elapsedDays(started) { return started ? (Date.now() - started) / 86400000 : 0; }
   function pctText(p) {
     if (p <= 0) return '0%';
@@ -789,7 +789,7 @@
       ['mushroom', '🍄', '蘑菇', st.girlUntil > now],
     ];
     sheet(`<h3>🍽️ 喂佩奇吃点东西</h3>
-      <p class="sheet-sub">${cd > 0 ? `刚喂过啦，${fmtLeft(cd)} 后才能再喂` : '每 5 分钟可以喂一次，效果持续 24 小时'}</p>
+      <p class="sheet-sub" id="feedCd">${cd > 0 ? `刚喂过啦，${Math.ceil(cd / 1000)} 秒后才能再喂` : '每 300 秒可以喂一次，效果持续 24 小时'}</p>
       <div class="food-list">${items.map(([k, ico, nm, on]) => {
         const pc = effectPct(st, k);
         return `<button class="food-row" data-food="${k}" ${cd > 0 ? 'disabled' : ''}>
@@ -803,11 +803,16 @@
     $$('.food-row').forEach((b) => { b.onclick = () => feedPeki(b.dataset.food); });
     clearInterval(feedTimer);
     feedTimer = setInterval(() => {
-      if (!$('.food-row')) return clearInterval(feedTimer);
+      const rows = $$('.food-row');
+      if (!rows.length) return clearInterval(feedTimer);
       const nowSt = pkState();
       $$('[data-bar]').forEach((el) => { el.style.width = effectPct(nowSt, el.dataset.bar) + '%'; });
       $$('[data-pct]').forEach((el) => { el.textContent = effectPct(nowSt, el.dataset.pct) + '%'; });
-    }, 60000);
+      const cd = Math.max(0, FEED_CD - (Date.now() - nowSt.lastFeed));
+      const cdEl = $('#feedCd');
+      if (cdEl) cdEl.textContent = cd > 0 ? `刚喂过啦，${Math.ceil(cd / 1000)} 秒后才能再喂` : '每 300 秒可以喂一次，效果持续 24 小时';
+      rows.forEach((b) => { if (cd > 0) b.setAttribute('disabled', ''); else b.removeAttribute('disabled'); });
+    }, 1000);
   }
 
   function feedPeki(kind) {
@@ -815,7 +820,7 @@
     if (st.dead) return;
     const now = Date.now();
     const cd = FEED_CD - (now - st.lastFeed);
-    if (cd > 0) { closeSheet(); return toast(`佩奇刚吃过，${fmtLeft(cd)} 后再喂`, '⏳'); }
+    if (cd > 0) { closeSheet(); return toast(`佩奇刚吃过，${Math.ceil(cd / 1000)} 秒后再喂`, '⏳'); }
     st.lastFeed = now;
     st.life[kind] = now + DAY;
     let msg = '', ico = '🍽️', gotCharm = false;
@@ -895,7 +900,7 @@
     const fb = $('#feedBtn'), tb = $('#teaseBtn');
     if (fb) {
       const d = FEED_CD - (now - st.lastFeed);
-      fb.innerHTML = d > 0 ? `🍽️ 冷却 ${fmtLeft(d)}` : '🍽️ 喂食';
+      fb.innerHTML = d > 0 ? '🍽️ 冷却 ' + Math.ceil(d / 1000) + 's' : '🍽️ 喂食';
     }
     if (tb) {
       const d = TEASE_CD - (now - st.lastTease);
@@ -906,7 +911,7 @@
   function pekiRules() {
     sheet(`<h3>📖 佩奇规则说明</h3>
       <div class="rule-list">
-        <p><b>🍽️ 喂食</b>每 5 分钟可以喂一次，每次选苹果、蛋糕或蘑菇其中的一样。</p>
+        <p><b>🍽️ 喂食</b>每 300 秒可以喂一次，每次选苹果、蛋糕或蘑菇其中的一样。</p>
         <p><b>🍎 苹果</b>佩奇跳进一个大洗澡池里泡澡（有泡泡和小黄鸭），持续 24 小时。</p>
         <p><b>🍰 蛋糕</b>佩奇脑袋变大 30%，持续 24 小时。</p>
         <p><b>🍄 蘑菇</b>佩奇旁边出现一个漂亮的双马尾女孩，持续 24 小时。</p>
@@ -1286,15 +1291,19 @@
         </div>
         <div class="vip-perk">
           <div><span>📝</span><b>每天免费抽 1 张小纸条</b></div>
-          <div><span>🏅</span><b>昵称旁显示会员标识</b></div>
-          <div><span>💾</span><b>打卡记录永久保留，到期不删</b></div>
+          <div><span>📅</span><b>可自行设置打卡开始时间</b></div>
+          <div><span>💾</span><b>打卡记录永久保留，可备份恢复</b></div>
         </div>
         <div class="sheet-actions col" style="margin-top:14px">
+          <button class="btn btn-ghost btn-lg" id="vipStart">📅 设置打卡开始时间</button>
+          <button class="btn btn-ghost btn-lg" id="vipBackup">💾 备份 / 恢复记录</button>
           <button class="btn btn-ghost btn-lg" id="vipAdd">再输一个码，续期</button>
           <button class="btn btn-primary btn-lg" id="vipOk">知道啦</button>
         </div>`);
       $('#vipOk').onclick = closeSheet;
       $('#vipAdd').onclick = () => vipInputSheet(true);
+      $('#vipStart').onclick = vipStartSheet;
+      $('#vipBackup').onclick = vipBackupSheet;
       return;
     }
     vipInputSheet(false);
@@ -1305,8 +1314,8 @@
       <p class="sheet-sub">${hasCode ? '再输一个激活码，有效期会在原来的基础上往后叠加' : '一个激活码对应一段有效期，输入后立即生效'}</p>
       <div class="vip-perk">
         <div><span>📝</span><b>每天免费抽 1 张小纸条</b></div>
-        <div><span>🏅</span><b>昵称旁显示会员标识</b></div>
-        <div><span>💾</span><b>打卡记录永久保留，到期不删</b></div>
+        <div><span>📅</span><b>可自行设置打卡开始时间</b></div>
+        <div><span>💾</span><b>打卡记录永久保留，可备份恢复</b></div>
       </div>
       <input class="vip-input" id="vipCode" placeholder="KP-XXXXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false">
       <div class="sheet-actions col" style="margin-top:12px">
@@ -1334,6 +1343,85 @@
     $('#vipAct').onclick = act;
     $('#vipCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') act(); });
     $('#vipCancel').onclick = closeSheet;
+  }
+
+  /* 会员：自行设置打卡开始时间 */
+  function vipStartSheet() {
+    if (!vipOn()) return toast('这是会员功能，先去开通会员吧', '🎫');
+    const rows = [['smoke', '🚬 戒烟', S.smoke], ['alcohol', '🍺 戒酒', S.alcohol], ['fit', '🏃 运动', S.fit]]
+      .filter(([, , m]) => m && m.cfg && m.cfg.started);
+    if (!rows.length) return toast('还没有开始的项目，先打卡一次再改', '📅');
+    const today = todayStr();
+    sheet(`<h3>📅 打卡开始时间</h3>
+      <p class="sheet-sub">想补记以前的日子，把开始日期往前调就行</p>
+      ${rows.map(([k, nm, m]) => {
+        const d = new Date(m.cfg.started);
+        const v = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+        return `<div class="date-row"><span>${nm}</span><input class="date-input" type="date" data-k="${k}" value="${v}" max="${today}"></div>`;
+      }).join('')}
+      <div class="sheet-actions col" style="margin-top:14px">
+        <button class="btn btn-primary btn-lg" id="dateSave">保存</button>
+        <button class="btn btn-ghost btn-lg" id="dateCancel">取消</button>
+      </div>
+      <p class="muted tiny" style="text-align:center;margin-top:10px">只能改到今天或更早，不能填以后的日子</p>`);
+    $('#dateSave').onclick = () => {
+      let n = 0;
+      $$('.date-input').forEach((el) => {
+        const m = S[el.dataset.k];
+        if (!el.value || !m || !m.cfg) return;
+        const t = new Date(el.value + 'T00:00:00').getTime();
+        if (!t || t > Date.now()) return;
+        if (Math.abs(t - m.cfg.started) > 60000) { m.cfg.started = t; n++; }
+      });
+      persist(); closeSheet(); render();
+      toast(n ? '打卡开始时间改好啦' : '没有改动', n ? '📅' : '💬');
+    };
+    $('#dateCancel').onclick = closeSheet;
+  }
+
+  /* 会员：备份 / 恢复记录 */
+  function vipBackupSheet() {
+    if (!vipOn()) return toast('这是会员功能，先去开通会员吧', '🎫');
+    sheet(`<h3>💾 备份打卡记录</h3>
+      <p class="sheet-sub">存一个文件在手机里，换手机、清缓存后都能用它恢复</p>
+      <div class="sheet-actions col">
+        <button class="btn btn-primary btn-lg" id="bkSave">下载备份文件</button>
+        <button class="btn btn-ghost btn-lg" id="bkLoad">从文件恢复</button>
+        <button class="btn btn-ghost btn-lg" id="bkCancel">关闭</button>
+      </div>
+      <input type="file" id="bkFile" accept=".json,application/json" style="display:none">
+      <p class="muted tiny" style="margin-top:10px;line-height:1.65">恢复会覆盖当前的打卡记录、积分和小纸条，请确认文件是自己导出的。</p>`);
+    $('#bkSave').onclick = () => {
+      const data = JSON.stringify({ app: 'kuailepeqi', exportedAt: new Date().toISOString(), account: S }, null, 2);
+      const blob = new Blob([data], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `佩奇备份-${todayStr()}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      toast('备份文件已保存', '💾');
+    };
+    $('#bkLoad').onclick = () => $('#bkFile').click();
+    $('#bkFile').onchange = async (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      try {
+        const obj = JSON.parse(await f.text());
+        const acc = obj && obj.account ? obj.account : obj;
+        if (!acc || typeof acc !== 'object' || !acc.createdAt) throw new Error('bad');
+        const keep = { wx: S.wx, nickname: S.nickname, avatar: S.avatar };
+        Object.keys(S).forEach((k) => delete S[k]);
+        Object.assign(S, acc, keep);
+        S = fixSave(S);
+        DB.accounts[DB.current] = S;
+        persist();
+        closeSheet(); render();
+        toast('记录恢复好啦', '✅');
+      } catch (err) {
+        toast('这个文件好像不对，换一个试试', '⚠️');
+      }
+    };
+    $('#bkCancel').onclick = closeSheet;
   }
 
   function serviceSheet() {
