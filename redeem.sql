@@ -60,4 +60,23 @@ end $$;
 
 grant execute on function public.pk_dm_latest(text, text) to anon, authenticated;
 
+-- 5. 删除私信聊天（双方记录一起清空）
+create or replace function public.pk_dm_clear(p_uid text, p_token text, p_with text)
+returns json
+language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from pk_players tb where tb.uid = p_uid and tb.token = p_token) then
+    return json_build_object('ok', false, 'err', 'bad_token');
+  end if;
+  if p_with is null or length(trim(p_with)) < 8 then
+    return json_build_object('ok', false, 'err', 'bad_with');
+  end if;
+  delete from pk_dms d
+   where (d.sender = p_uid and d.receiver = trim(p_with))
+      or (d.sender = trim(p_with) and d.receiver = p_uid);
+  return json_build_object('ok', true);
+end $$;
+
+grant execute on function public.pk_dm_clear(text, text, text) to anon, authenticated;
+
 -- 完成
