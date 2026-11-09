@@ -156,7 +156,7 @@
     const a = DB.accounts[id];
     if (!a) return openWxAuth();
     sheet(`<h3>删除这条登录记录？</h3>
-      <p class="sheet-sub">「${esc(a.nickname || '微信用户')}」的打卡记录、积分、盲盒和小秘密都会被删除，无法恢复。</p>
+      <p class="sheet-sub">「${esc(a.nickname || '微信用户')}」的打卡记录、积分、小纸条和小秘密都会被删除，无法恢复。</p>
       <div class="sheet-actions">
         <button class="btn btn-ghost" id="delNo">取消</button>
         <button class="btn btn-danger" id="delYes">删除记录</button>
@@ -618,17 +618,18 @@
   }
 
   /* ---------------- 佩奇 ---------------- */
+  /* 十张小纸条：都是陪着你、给你打气的话 */
   const NOTES = [
-    '顺其自然，随遇而安。（《庄子》）',
-    '本来无一物，何处惹尘埃。（惠能）',
-    '人生如逆旅，我亦是行人。（苏轼）',
-    '乱花渐欲迷人眼，浅草才能没马蹄。（白居易）',
-    '知足者常乐，终身不辱。（老子）',
-    '盛年不重来，一日难再晨。（陶渊明）',
-    '浆声灯影里的日子，过一天，少一天。（朱自清）',
-    '水满则溢，月盈则亏。（《淮南子》）',
-    '天下事有难易乎？为之，则难者亦易矣。（彭端淑）',
-    '临渊羡鱼，不如退而结网。（《汉书》）',
+    '今天也来了，我就知道你还在坚持。',
+    '慢一点没关系，别停下来就好。',
+    '你少抽的那一支烟，我都记着呢。',
+    '撑不住的时候，来摸摸我的头。',
+    '不用做到满分，做到今天就行。',
+    '没忍住的那天别骂自己，明天还能再来。',
+    '你在努力，我就在旁边看着。',
+    '每个想放弃的夜里，都有人在等你回来。',
+    '累了就歇会儿，但别投降。',
+    '一天一天攒下来，就是了不起。',
   ];
   /* 点头像时的回应（睡着时不回应） */
   const TAP_LINES = {
@@ -906,7 +907,7 @@
         <p><b>🍄 蘑菇</b>佩奇旁边出现一个漂亮的双马尾女孩，持续 24 小时。</p>
         <p><b>＋1 魅力</b>状态已经在生效时，再喂同一样东西，魅力值 +1。</p>
         <p><b>💃 逗一逗</b>每 1 分钟可以逗一次，佩奇会跳舞 5 秒。</p>
-        <p><b>🎁 盲盒</b>戒烟、戒酒、运动每打卡一次 +1 积分，一天最多 3 积分；逗一逗佩奇每次 +1 积分，一天最多 2 积分。20 积分抽一个盲盒，随机抽。</p>
+        <p><b>📝 小纸条</b>：戒烟、戒酒、运动每打卡一次 +1 积分，一天最多 3 积分；逗一逗佩奇每次 +1 积分，一天最多 2 积分。20 积分抽一张小纸条，随机抽，佩奇写给你的话都在这儿。</p>
         <p><b>⏰ 小闹钟</b>点顶部的「小闹钟」可以定一个目标时间，之后会一直显示距离目标还剩多少天多少小时多少分。</p>
         <p><b>✨ 小佩奇</b>魅力 10 / 50 / 200 会出现 1 / 2 / 3 个小佩奇，发色依次是黄、白、红，最多 3 个。</p>
         <p><b>🪦 会离开</b>现实时间 3 天没有喂佩奇，佩奇就会离开，魅力值清零。之后可以重新养一只。</p>
@@ -1033,12 +1034,12 @@
         <div id="msgList">${S.msgs.length ? '' : '<p class="muted tiny" style="text-align:center">还没有悄悄话</p>'}</div>
       </div>
       <div class="card">
-        <h3>⭐ 我的积分 · 抽盲盒</h3>
+        <h3>⭐ 我的积分 · 抽小纸条</h3>
         ${statsRow([['当前积分', `<span id="curPts">${S.points}</span>`], ['今日已得', `<span id="todayPts">${todayN}/5</span>`]])}
-        <button class="btn btn-primary btn-lg" id="drawBox" ${S.points < 20 ? 'disabled' : ''} style="margin-top:14px">抽一个盲盒（⭐20）</button>
+        <button class="btn btn-primary btn-lg" id="drawBox" ${S.points < 20 ? 'disabled' : ''} style="margin-top:14px">抽一张小纸条（⭐20）</button>
         <div class="note-wrap">
-          <p class="note-title">🎁 已抽到的盲盒 ${got} 个${got ? '（点一下看全文）' : ''}</p>
-          ${got ? `<div class="note-list">${S.notes.map((i, j) => `<button class="note-item" data-note="${i}" data-idx="${j + 1}"><span class="note-idx">${j + 1}</span><span class="note-txt">${esc(NOTES[i])}</span></button>`).join('')}</div>` : '<p class="muted tiny">还没有抽过盲盒，攒够 20 分来抽一个吧。</p>'}
+          <p class="note-title">📝 已抽到的小纸条 ${got} 张${got ? '（点一下看全文）' : ''}</p>
+          ${got ? `<div class="note-list">${S.notes.map((i, j) => `<button class="note-item" data-note="${i}" data-idx="${j + 1}"><span class="note-idx">${j + 1}</span><span class="note-txt">${esc(NOTES[i])}</span></button>`).join('')}</div>` : '<p class="muted tiny">还没有抽过小纸条，攒够 20 积分来抽一张吧。</p>'}
         </div>
       </div>
       <button class="btn btn-ghost btn-lg rules-btn" id="pekiRules">📖 佩奇规则说明</button>
@@ -1093,13 +1094,13 @@
         if (who === 'mini') { el.classList.remove('mini-bop'); void el.getBBox().width; el.classList.add('mini-bop'); }
       });
     });
-    /* 已抽到的盲盒：点一下看全文 */
+    /* 已抽到的小纸条：点一下看全文 */
     $$('.note-item').forEach((b) => {
       b.onclick = () => {
         const i = +b.dataset.note, idx = +b.dataset.idx;
-        sheet(`<h3>🎁 第 ${idx} 个盲盒</h3>
+        sheet(`<h3>📝 第 ${idx} 张纸条</h3>
           <div class="note-big" style="margin-top:10px">${esc(NOTES[i])}</div>
-          <button class="btn btn-primary btn-lg" style="margin-top:14px" onclick="document.querySelector('.sheet-mask').remove()">收好啦</button>`);
+          <button class="btn btn-primary btn-lg" style="margin-top:14px" onclick="document.querySelector('.sheet-mask').remove()">收好了</button>`);
       };
     });
     clearInterval(pkClockTimer);
@@ -1131,15 +1132,15 @@
     }, 1000);
     $('#drawBox').onclick = () => {
       if (S.points < 20) return toast('积分不够，先去打卡攒 20 分', '⭐');
-      /* 一共十个盲盒，可以一直抽，可能抽到重复的 */
+      /* 一共十张小纸条，可以一直抽，可能抽到重复的 */
       const got2 = Math.floor(Math.random() * NOTES.length);
       S.points -= 20;
       S.notes.push(got2);
       persist();
-      sheet(`<h3>🎁 盲盒打开啦</h3>
+      sheet(`<h3>📝 佩奇写给你的</h3>
         <div class="note-big">${NOTES[got2]}</div>
-        <p class="muted tiny" style="text-align:center">已抽 ${S.notes.length} 个 · 剩余积分 ⭐${S.points}</p>
-        <button class="btn btn-primary btn-lg" onclick="document.querySelector('.sheet-mask').remove()">收好啦</button>`);
+        <p class="muted tiny" style="text-align:center">已抽 ${S.notes.length} 张 · 剩余积分 ⭐${S.points}</p>
+        <button class="btn btn-primary btn-lg" onclick="document.querySelector('.sheet-mask').remove()">收好了</button>`);
       render();
     };
     $('#msgSend').onclick = () => {
@@ -1151,7 +1152,7 @@
       renderPeki();
     };
     const d = new Date(), hr = d.getHours();
-    const greet = hr < 6 ? '这么晚还不睡？' : hr < 11 ? '早上好，今天也要加油！' : hr < 14 ? '中午好，饭后走一走～' : hr < 19 ? '下午好，来抽盲盒吗？' : '晚上好，今天打卡了吗？';
+    const greet = hr < 6 ? '这么晚还不睡？' : hr < 11 ? '早上好，今天也要加油！' : hr < 14 ? '中午好，饭后走一走～' : hr < 19 ? '下午好，来抽张纸条吗？' : '晚上好，今天打卡了吗？';
     const list = $('#msgList');
     if (S.msgs.length) {
       list.innerHTML = S.msgs.map((m, i) => `<div class="msg-item"><div><p>${esc(m.txt)}</p>
