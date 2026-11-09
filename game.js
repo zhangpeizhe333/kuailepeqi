@@ -45,6 +45,13 @@
   function fixSave(s) {
     const f = freshSave();
     for (const k of Object.keys(f)) if (s[k] === undefined) s[k] = f[k];
+    /* 打卡日历历史：老存档补 days 数组（把最近打卡日算进去） */
+    for (const k of ['smoke', 'alcohol', 'fit']) {
+      const m = s[k];
+      if (m && typeof m === 'object') {
+        if (!Array.isArray(m.days)) m.days = m.lastDate ? [m.lastDate] : [];
+      }
+    }
     return s;
   }
 
@@ -251,6 +258,8 @@
     m.total = (m.total || 0) + 1;
     m.lastDate = todayStr();
     m.lastTime = Date.now();
+    if (!Array.isArray(m.days)) m.days = [];
+    if (!m.days.includes(m.lastDate)) m.days.push(m.lastDate);   // 打卡日历历史
     if (S.pointsToday.d !== todayStr()) S.pointsToday = { d: todayStr(), n: 0 };
     let pts = 0;
     if (S.pointsToday.n < 3) { S.points += 1; S.pointsToday.n += 1; pts = 1; }
@@ -1308,7 +1317,7 @@
           <div><b>${esc(S.vip.plan || '会员')} · 生效中</b>
           <small>有效期至 ${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 · ${leftTxt}</small></div>
         </div>
-        <p class="muted tiny" style="text-align:center;margin:10px 0 0">续费：¥6/月 · ¥66/年 · ¥166/永久，找客服拿激活码即输即到</p>
+        <p class="muted tiny" style="text-align:center;margin:10px 0 0">续费：¥8/月 · ¥88/年 · ¥188/永久，找客服拿激活码</p>
         <div class="vip-perk">
           <div><span>📝</span><b>每天免费抽 1 张小纸条</b></div>
           <div><span>📅</span><b>可自行设置打卡开始时间</b></div>
@@ -1334,9 +1343,9 @@
     sheet(`<h3>🎫 陪伴会员</h3>
       <p class="sheet-sub">${hasCode ? '再输一个新码可续期叠加（每个码只能用一次）' : '每个激活码只能用一次，输入后立即生效'}</p>
       <div class="vip-price">
-        <div><b>¥6</b><small>/ 月</small></div>
-        <div><b>¥66</b><small>/ 年</small></div>
-        <div><b>¥166</b><small>/ 永久</small></div>
+        <div><b>¥8</b><small>/ 月</small></div>
+        <div><b>¥88</b><small>/ 年</small></div>
+        <div><b>¥188</b><small>/ 永久</small></div>
       </div>
       <div class="vip-perk">
         <div><span>📝</span><b>每天免费抽 1 张小纸条</b></div>
@@ -1392,79 +1401,169 @@
     $('#vipCancel').onclick = closeSheet;
   }
 
-  /* 会员：自行设置打卡开始时间 */
+  /* ---------------- 自绘日历（网页 / APK 样式统一） ---------------- */
+  const CAL_W = ['日', '一', '二', '三', '四', '五', '六'];
+
+  /* 会员：自行设置打卡开始时间（日历单选） */
+  let startCal = null;
   function vipStartSheet() {
     if (!vipOn()) return toast('这是会员功能，先去开通会员吧', '🎫');
     const rows = [['smoke', '🚬 戒烟', S.smoke], ['alcohol', '🍺 戒酒', S.alcohol], ['fit', '🏃 运动', S.fit]]
       .filter(([, , m]) => m && m.cfg && m.cfg.started);
     if (!rows.length) return toast('还没有开始的项目，先打卡一次再改', '📅');
-    const today = todayStr();
+    startCal = { mod: rows[0][0], y: new Date().getFullYear(), mo: new Date().getMonth(), sel: new Set() };
+    renderStartCal();
+  }
+  function renderStartCal() {
+    const rows = [['smoke', '🚬 戒烟'], ['alcohol', '🍺 戒酒'], ['fit', '🏃 运动']].filter(([k]) => S[k] && S[k].cfg && S[k].cfg.started);
+    const st = startCal;
+    const m = S[st.mod];
+    const d = new Date(m.cfg.started);
+    const cur = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
     sheet(`<h3>📅 打卡开始时间</h3>
-      <p class="sheet-sub">想补记以前的日子，把开始日期往前调就行</p>
-      ${rows.map(([k, nm, m]) => {
-        const d = new Date(m.cfg.started);
-        const v = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-        return `<div class="date-row"><span>${nm}</span><input class="date-input" type="date" data-k="${k}" value="${v}" max="${today}"></div>`;
-      }).join('')}
-      <div class="sheet-actions col" style="margin-top:14px">
-        <button class="btn btn-primary btn-lg" id="dateSave">保存</button>
-        <button class="btn btn-ghost btn-lg" id="dateCancel">取消</button>
-      </div>
-      <p class="muted tiny" style="text-align:center;margin-top:10px">只能改到今天或更早，不能填以后的日子</p>`);
-    $('#dateSave').onclick = () => {
-      let n = 0;
-      $$('.date-input').forEach((el) => {
-        const m = S[el.dataset.k];
-        if (!el.value || !m || !m.cfg) return;
-        const t = new Date(el.value + 'T00:00:00').getTime();
-        if (!t || t > Date.now()) return;
-        if (Math.abs(t - m.cfg.started) > 60000) { m.cfg.started = t; n++; }
-      });
+      <p class="sheet-sub">选哪天，就从哪天开始算天数（网页、手机版式一致）</p>
+      <div class="cal-tabs">${rows.map(([k, nm]) => `<button class="cal-tab ${k === st.mod ? 'on' : ''}" data-ct="${k}">${nm}</button>`).join('')}</div>
+      ${calHtml(st.mod, st, false)}
+      <p class="cal-hint">当前开始：${cur} · 今天之前的日期可选</p>
+      <div class="sheet-actions col" style="margin-top:10px">
+        <button class="btn btn-primary btn-lg" id="stSave">保存</button>
+        <button class="btn btn-ghost btn-lg" id="stCancel">取消</button>
+      </div>`);
+    $$('.cal-tab').forEach((b) => { b.onclick = () => { startCal.mod = b.dataset.ct; startCal.sel.clear(); renderStartCal(); }; });
+    bindCal(st, renderStartCal, false);
+    $('#stCancel').onclick = closeSheet;
+    $('#stSave').onclick = () => {
+      if (!st.sel.size) return toast('先在日历上选一天', '📅');
+      const ds = [...st.sel][0];
+      const t = new Date(ds + 'T00:00:00').getTime();
+      const m = S[st.mod];
+      if (t > Date.now()) return toast('不能选以后的日子', '📅');
+      m.cfg.started = t;
+      /* 开始日期变了，之前补签里早于新开始日的记录退回去 */
+      const mk = S.makeup[st.mod] || [];
+      const back = mk.filter((x) => new Date(x + 'T00:00:00').getTime() < t);
+      if (back.length) {
+        S.makeup[st.mod] = mk.filter((x) => !back.includes(x));
+        m.total = Math.max(0, (m.total || 0) - back.length);
+      }
       persist(); closeSheet(); render();
-      toast(n ? '打卡开始时间改好啦' : '没有改动', n ? '📅' : '💬');
+      toast(`${st.mod === 'smoke' ? '戒烟' : st.mod === 'alcohol' ? '戒酒' : '运动'}开始时间已改为 ${ds.slice(5).replace('-', ' 月 ')} 日`, '📅');
     };
-    $('#dateCancel').onclick = closeSheet;
   }
 
-  /* 会员：补签打卡（从开始时间起，漏掉的都能补） */
+  /* 会员：补签打卡（日历多选未打卡的日期） */
+  let mkCal = null;
   function vipMakeupSheet() {
     if (!vipOn()) return toast('这是会员功能，先去开通会员吧', '🎫');
     if (!S.makeup || typeof S.makeup !== 'object') S.makeup = { smoke: [], alcohol: [], fit: [] };
     const rows = [['smoke', '🚬 戒烟', S.smoke], ['alcohol', '🍺 戒酒', S.alcohol], ['fit', '🏃 运动', S.fit]]
       .filter(([, , m]) => m && m.cfg && m.cfg.started);
     if (!rows.length) return toast('还没有开始的项目，先打卡一次再来补签', '🖊️');
-    const today = todayStr();
+    const now = new Date();
+    mkCal = { mod: rows[0][0], y: now.getFullYear(), mo: now.getMonth(), sel: new Set() };
+    renderMakeupCal();
+  }
+  function renderMakeupCal() {
+    const rows = [['smoke', '🚬 戒烟'], ['alcohol', '🍺 戒酒'], ['fit', '🏃 运动']].filter(([k]) => S[k] && S[k].cfg && S[k].cfg.started);
+    const st = mkCal;
+    const made = (S.makeup[st.mod] || []).length;
     sheet(`<h3>🖊️ 补签打卡</h3>
-      <p class="sheet-sub">忘了打卡的那天，选一下日期就补上，已坚持天数不变但打卡次数 +1</p>
-      ${rows.map(([k, nm, m]) => {
-        const made = (S.makeup[k] || []).length;
-        return `<div class="date-row"><span>${nm}${made ? ` <small class="mk-cnt">(已补 ${made} 天)</small>` : ''}</span><input class="date-input" type="date" data-k="${k}" max="${today}"></div>`;
-      }).join('')}
-      <div class="sheet-actions col" style="margin-top:14px">
-        <button class="btn btn-primary btn-lg" id="mkSave">补上这一天</button>
+      <p class="sheet-sub">白格 = 没打卡的日子，点它选中（可多选），保存后每天打卡次数 +1</p>
+      <div class="cal-tabs">${rows.map(([k, nm]) => `<button class="cal-tab ${k === st.mod ? 'on' : ''}" data-ct="${k}">${nm}</button>`).join('')}</div>
+      ${calHtml(st.mod, st, true)}
+      <p class="cal-hint">✅ = 已打卡 · 已补 ${made} 天${st.sel.size ? ` · 本次已选 ${st.sel.size} 天` : ''}</p>
+      <div class="sheet-actions col" style="margin-top:10px">
+        <button class="btn btn-primary btn-lg" id="mkSave">${st.sel.size ? `补上这 ${st.sel.size} 天` : '保存'}</button>
         <button class="btn btn-ghost btn-lg" id="mkCancel">取消</button>
-      </div>
-      <p class="muted tiny" style="text-align:center;margin-top:10px">只能补开始时间以后、且今天之前没打卡的日子；补签不加积分</p>`);
+      </div>`);
+    $$('.cal-tab').forEach((b) => { b.onclick = () => { mkCal.mod = b.dataset.ct; mkCal.sel.clear(); renderMakeupCal(); }; });
+    bindCal(st, renderMakeupCal, true);
     $('#mkCancel').onclick = closeSheet;
     $('#mkSave').onclick = () => {
-      const dstr = $$('.date-input').map((el) => (el.value ? [el.dataset.k, el.value] : null)).filter(Boolean);
-      if (!dstr.length) return toast('先选一个要补的日期', '🗓️');
-      if (dstr.length > 1) return toast('一次补一天就行，别贪多～', '🗓️');
-      const [k, d] = dstr[0];
-      const m = S[k];
-      const t = new Date(d + 'T00:00:00').getTime();
-      if (!m || !m.cfg || !m.cfg.started) return toast('这个项目还没开始', '🗓️');
-      if (t < m.cfg.started) return toast('那一天还没开始打卡呢', '🗓️');
-      if (t > Date.now()) return toast('不能补以后的日子', '🗓️');
-      if (m.lastDate === d) return toast('这一天已经打过卡啦', '✅');
-      if ((S.makeup[k] || []).includes(d)) return toast('这一天已经补过签了', '✅');
-      if (!S.makeup[k]) S.makeup[k] = [];
-      S.makeup[k].push(d);
-      m.total = (m.total || 0) + 1;
-      persist();
-      closeSheet(); render();
-      toast(`${d.slice(5).replace('-', ' 月 ')} 日补签成功，打卡次数 +1`, '🖊️');
+      if (!st.sel.size) return toast('先点选没打卡的日子', '🗓️');
+      const m = S[st.mod];
+      if (!S.makeup[st.mod]) S.makeup[st.mod] = [];
+      let n = 0;
+      const ds = [...st.sel].sort();
+      for (const d of ds) {
+        const t = new Date(d + 'T00:00:00').getTime();
+        if (t < m.cfg.started || t > Date.now()) continue;
+        if ((m.days || []).includes(d) || S.makeup[st.mod].includes(d) || m.lastDate === d) continue;
+        S.makeup[st.mod].push(d);
+        m.total = (m.total || 0) + 1;
+        n++;
+      }
+      persist(); closeSheet(); render();
+      toast(n ? `补签成功 ${n} 天，打卡次数 +${n}` : '选的日子都打过了', n ? '🖊️' : '✅');
     };
+  }
+
+  /* 日历渲染 + 交互绑定（startT/makeup/days 决定格子状态） */
+  function calHtml(mod, st, multi) {
+    const m = S[mod];
+    const startT = m.cfg.started ? new Date(m.cfg.started).setHours(0, 0, 0, 0) : Infinity;
+    const doneSet = new Set([...(m.days || []), ...(S.makeup[mod] || []), m.lastDate].filter(Boolean));
+    const y = st.y, mo = st.mo;
+    const firstW = new Date(y, mo, 1).getDay();
+    const dim = new Date(y, mo + 1, 0).getDate();
+    const nowD = new Date(); const todayS = todayStr();
+    const minT = Math.min(startT, nowD.getTime());
+    const minY = new Date(minT).getFullYear(), minMo = new Date(minT).getMonth();
+    let cells = CAL_W.map((w) => `<i class="cal-cell cal-w">${w}</i>`).join('');
+    for (let i = 0; i < firstW; i++) cells += '<i class="cal-cell empty"></i>';
+    for (let d = 1; d <= dim; d++) {
+      const ds = `${y}-${pad2(mo + 1)}-${pad2(d)}`;
+      const t = new Date(y, mo, d).getTime();
+      let cls = 'cal-cell';
+      if (doneSet.has(ds)) cls += ' done';
+      else if (t < startT || t > Date.now()) cls += ' dis';
+      else cls += ' miss';
+      if (st.sel.has(ds)) cls += ' sel';
+      cells += `<i class="${cls}" data-d="${ds}">${d}</i>`;
+    }
+    const canPrev = y > minY || (y === minY && mo > minMo);
+    const canNext = y < nowD.getFullYear() || (y === nowD.getFullYear() && mo < nowD.getMonth());
+    return `<div class="cal-box" data-multi="${multi ? 1 : 0}">
+      <div class="cal-head">
+        <button class="cal-nav" data-cnav="-1" ${canPrev ? '' : 'disabled'}>‹</button>
+        <b>${y} 年 ${mo + 1} 月</b>
+        <button class="cal-nav" data-cnav="1" ${canNext ? '' : 'disabled'}>›</button>
+      </div>
+      <div class="cal-grid">${cells}</div>
+    </div>`;
+  }
+  function bindCal(st, rerender, multi) {
+    $$('.cal-nav').forEach((b) => {
+      b.onclick = () => {
+        st.mo += parseInt(b.dataset.cnav, 10);
+        if (st.mo < 0) { st.mo = 11; st.y--; }
+        if (st.mo > 11) { st.mo = 0; st.y++; }
+        rerender();
+      };
+    });
+    $$('.cal-cell[data-d]').forEach((el) => {
+      el.onclick = () => {
+        const ds = el.dataset.d;
+        const done = el.classList.contains('done');
+        const dis = el.classList.contains('dis');
+        if (dis) return toast('这个日期选不了', '🗓️');
+        if (done) return toast('这一天已经打过卡啦', '✅');
+        if (multi) {
+          if (st.sel.has(ds)) { st.sel.delete(ds); el.classList.remove('sel'); }
+          else { st.sel.add(ds); el.classList.add('sel'); }
+          const hint = st.sel.size ? `本次已选 ${st.sel.size} 天` : '';
+          const btn = $('#mkSave');
+          if (btn) btn.textContent = st.sel.size ? `补上这 ${st.sel.size} 天` : '保存';
+          const hEl = $('.cal-hint');
+          if (hEl) hEl.innerHTML = `✅ = 已打卡 · 已补 ${(S.makeup[st.mod] || []).length} 天${hint ? ` · ${hint}` : ''}`;
+        } else {
+          $$('.cal-cell.sel').forEach((x) => x.classList.remove('sel'));
+          st.sel.clear();
+          st.sel.add(ds);
+          el.classList.add('sel');
+        }
+      };
+    });
   }
 
   /* ---------------- 好友（Supabase 云端） ---------------- */
@@ -1783,10 +1882,13 @@
         if (m.mid <= lastId) continue;
         lastId = m.mid;
         const mine = m.uid === c.uid;
+        const who = mine ? { nickname: S.nickname || '我', avatar: S.avatar || '🐣', gender: S.gender, vip: vipOn() } : m;
         html += `<div class="chat-msg ${mine ? 'mine' : ''}">
-          ${mine ? '' : `<span class="chat-ava">${esc2(m.avatar || '🐣')}</span>`}
-          <div class="chat-who ${mine ? 'r' : ''}">${mine ? '' : `${nameHtml(m)}${genderMark(m.gender)}`}</div>
-          <div class="chat-bub ${mine ? 'mine-bub' : 'them'} ${m.vip ? 'vip-text' : ''}">${esc2(m.body)}</div>
+          <span class="chat-ava">${esc2(who.avatar || '🐣')}</span>
+          <div class="msg-col">
+            <div class="chat-who ${mine ? 'r' : ''}">${nameHtml(who)}${genderMark(who.gender)}</div>
+            <div class="chat-bub ${mine ? 'mine-bub' : 'them'} ${m.vip ? 'vip-text' : ''}">${esc2(m.body)}</div>
+          </div>
         </div>`;
       }
       if (html) { body.insertAdjacentHTML('beforeend', html); body.scrollTop = body.scrollHeight; }
@@ -1941,7 +2043,7 @@
 
   /* ---------------- 主渲染 ---------------- */
   function render() {
-    $('#ptsBadge').textContent = '⭐ ' + S.points;
+    /* 顶部积分徽章已移除（挡住昵称和 VIP 标识） */
     const nb = $('#nickBtn');
     if (nb) {
       nb.innerHTML = (S.nickname || '未命名') + (vipOn() ? ' <span class="vip-mini">VIP</span>' : '');
