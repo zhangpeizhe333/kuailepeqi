@@ -1325,7 +1325,7 @@
 
   function vipInputSheet(hasCode) {
     sheet(`<h3>🎫 陪伴会员</h3>
-      <p class="sheet-sub">${hasCode ? '再输一个激活码，有效期会在原来的基础上往后叠加' : '一个激活码对应一段有效期，输入后立即生效'}</p>
+      <p class="sheet-sub">${hasCode ? '再输一个新码可续期叠加（每个码只能用一次）' : '每个激活码只能用一次，输入后立即生效'}</p>
       <div class="vip-price">
         <div><b>¥6</b><small>/ 月</small></div>
         <div><b>¥66</b><small>/ 年</small></div>
@@ -1344,7 +1344,7 @@
       </div>
       <p class="muted tiny" style="text-align:center;margin-top:10px">还没有激活码？去菜单里点「联系客服」找我买</p>`);
 
-    const act = () => {
+    const act = async () => {
       const el = $('#vipCode');
       const r = vipParse(el.value);
       if (!r) {
@@ -1352,13 +1352,33 @@
         setTimeout(() => el.classList.remove('shake'), 600);
         return toast('激活码不对，检查一下有没有输错', '⚠️');
       }
-      const base = Math.max(Date.now(), (S.vip && S.vip.until) || 0);
-      S.vip = { until: base + r.days * DAY, code: el.value.trim().toUpperCase(), plan: r.plan };
-      S.vipFree = { d: '', used: false };
-      persist();
-      render();
-      toast(`开通成功，${r.plan}会员已生效`, '🎉');
-      setTimeout(vipSheet, 500);
+      const norm = String(el.value).toUpperCase().replace(/[^0-9A-Z]/g, '');
+      const btn = $('#vipAct');
+      btn.disabled = true;
+      try {
+        /* 一码一用：先在云端核销（用过就失效），成功才开通 */
+        await sbSync().catch(() => {});
+        const c = cloudId();
+        const res = await sbRpc('pk_code_redeem', { p_uid: c.uid, p_token: c.token, p_code: norm });
+        if (res && res.ok) {
+          const base = Math.max(Date.now(), (S.vip && S.vip.until) || 0);
+          S.vip = { until: base + r.days * DAY, code: norm, plan: r.plan };
+          S.vipFree = { d: '', used: false };
+          persist();
+          render();
+          toast(`开通成功，${r.plan}会员已生效`, '🎉');
+          setTimeout(vipSheet, 500);
+        } else if (res && res.err === 'used') {
+          el.classList.add('shake');
+          setTimeout(() => el.classList.remove('shake'), 600);
+          toast('这个激活码已经被用过了，每个码只能用一次', '🚫');
+        } else {
+          toast('激活失败，稍后再试', '⚠️');
+        }
+      } catch (err) {
+        toast('连不上云端，激活失败，检查网络', '📡');
+      }
+      btn.disabled = false;
     };
     $('#vipAct').onclick = act;
     $('#vipCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') act(); });
