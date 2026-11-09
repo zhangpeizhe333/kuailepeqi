@@ -1,0 +1,9 @@
+{
+  "name": "快乐佩奇：戒烟戒酒跟我走",
+  "short_name": "戒烟戒酒",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#171227",
+  "theme_color": "#171227",
+  "icons": [{ "src": "icon.png", "sizes": "512x512", "type": "image/png" }]
+}

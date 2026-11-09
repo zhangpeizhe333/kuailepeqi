@@ -1,0 +1,1314 @@
+/* 戒烟戒酒跟我走 · 主逻辑（单机 · localStorage 存档 · 多微信账号） */
+(function () {
+  'use strict';
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => [...document.querySelectorAll(s)];
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const startLabel = (ts) => { const d = new Date(ts); return `${d.getMonth() + 1}月${d.getDate()}日<span class="stat-sub">${pad2(d.getHours())}:${pad2(d.getMinutes())}</span>`; };
+  /* 今日已得积分：打卡最多 3 分 + 逗一逗最多 2 分 = 5 分 */
+  function todayPoints() {
+    const d = todayStr();
+    const a = S && S.pointsToday && S.pointsToday.d === d ? S.pointsToday.n : 0;
+    const b = S && S.teaseToday && S.teaseToday.d === d ? S.teaseToday.n : 0;
+    return a + b;
+  }
+
+  const DB_KEY = 'quitwalk_accounts_v1';
+  const AVATARS = ['🐣', '🐰', '🐻', '🦊', '🐼', '🐨', '🐯', '🦁', '🐮', '🐸'];
+
+  let DB = null;
+  let S = null;
+  let tab = 'peki';
+  const sceneIdxs = { smoke: 0, alcohol: 0, fit: 0 };
+  const infoOpen = { smoke: false, alcohol: false, fit: false };
+
+  /* ---------------- 存档 ---------------- */
+  function loadDB() {
+    try { DB = JSON.parse(localStorage.getItem(DB_KEY)) || null; } catch (e) { DB = null; }
+    if (!DB || typeof DB !== 'object' || !DB.accounts) DB = { current: null, accounts: {} };
+  }
+  function persist() { localStorage.setItem(DB_KEY, JSON.stringify(DB)); }
+  function freshSave() {
+    return {
+      wx: null, nickname: '', gender: 'boy', age: '', signature: '无语中..', avatar: '🐣',
+      smoke: null, alcohol: null, fit: null,
+      points: 0, pointsToday: { d: '', n: 0 }, teaseToday: { d: '', n: 0 }, notes: [], msgs: [], pekiCheer: 0,
+      peki: { charm: 0, lastFeed: 0, lastTease: 0, ghostUntil: 0, bigUntil: 0, girlUntil: 0, ptUntil: 0, dead: false },
+      clock: { target: 0 },
+      createdAt: Date.now()
+    };
+  }
+  function fixSave(s) {
+    const f = freshSave();
+    for (const k of Object.keys(f)) if (s[k] === undefined) s[k] = f[k];
+    return s;
+  }
+
+  /* ---------------- 弹层 / 提示 ---------------- */
+  function sheet(html) {
+    $('#sheetRoot').innerHTML = `<div class="sheet-mask in"><div class="sheet in">${html}</div></div>`;
+    $('.sheet-mask').addEventListener('click', (e) => { if (e.target.classList.contains('sheet-mask')) closeSheet(); });
+  }
+  function closeSheet() {
+    $('#sheetRoot').innerHTML = '';
+    if (typeof feedTimer !== 'undefined' && feedTimer) { clearInterval(feedTimer); feedTimer = null; }
+  }
+  function toast(msg, ico) {
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.innerHTML = `${ico || '💬'} ${esc(msg)}`;
+    $('#toastWrap').appendChild(t);
+    setTimeout(() => t.classList.add('out'), 2200);
+    setTimeout(() => t.remove(), 2600);
+  }
+
+  /* ---------------- 称号 ---------------- */
+  const SMOKE_TITLES = [
+    [0, '游客', '还没有开始打卡，先定个小目标：明天见！'],
+    [1, '小趴菜', '打卡第 1 天，腿软手抖但方向对了。'],
+    [2, '打不死的小强', '连续两天顶住了，生命力和小强一样顽强。'],
+    [7, '热血少年', '一周整！肺已经开始感谢你了。'],
+    [15, '铁血硬汉', '半个月不动摇，意志力钢铁一般。'],
+    [30, '空气净化器', '一个月不吸烟，走到哪都是清新空气。'],
+    [50, '世外高人', '五十天看破烟云，境界已经不一样了。'],
+    [75, '法外狂徒', '七十五天了，烟见了你都得绕道走。'],
+    [100, '纯爱战神', '一百天！对自己的身体爱得彻彻底底。'],
+  ];
+  const ALCOHOL_TITLES = [
+    [0, '游客', '还没有开始打卡，清醒之旅从明天开始。'],
+    [1, '欢乐戒酒人', '第一天没喝，快乐是清醒的快乐。'],
+    [2, '酒蒙子觉醒', '两天了，酒蒙子的眼睛开始睁开。'],
+    [7, '清醒大佐', '一周滴酒未沾，头脑清晰指挥若定。'],
+    [15, '人间清醒', '半个月，整个世界都清楚了。'],
+    [30, '无情哈拉少', '一个月不碰酒，又猛又清醒，哈拉少！'],
+    [50, '反酒同盟会', '五十天，你已经是我们同盟的中坚力量。'],
+    [75, '酒精过敏综合症', '七十五天，看酒就想绕着走。'],
+    [100, '酒局终结者', '一百天！酒局来了你都能笑着挡回去。'],
+  ];
+  const FIT_TITLES = [
+    [0, '游客', '还没打卡，运动会等你第一天。'],
+    [1, '推门就跑', '第一天就冲了，气势拉满。'],
+    [7, '办卡会员', '一周了，健身房都记住你的脸了。'],
+    [15, '铁汁附体', '半个月，肌肉开始跟你称兄道弟。'],
+    [30, '挥汗机器', '一个月，汗水都快汇成小河了。'],
+    [60, '撸铁大师', '两个月，铁见了你都服气。'],
+    [90, '吨位怪兽', '三个月，深蹲架都是你的主场。'],
+    [180, '施瓦辛格', '半年，体型已经开始有大佬的影子。'],
+    [360, '人形高达', '一年！你已经不是普通人，是人形高达。'],
+  ];
+  function titleOf(list, days) {
+    let cur = list[0];
+    for (const t of list) if (days >= t[0]) cur = t;
+    return cur;
+  }
+
+  /* ---------------- 健康恢复 ---------------- */
+  const SMOKE_HEALTH = [['味觉与皮肤', 60], ['生理烟瘾', 90], ['嗅觉', 150], ['心理烟瘾', 300], ['免疫力', 1000], ['血液', 3000]];
+  const ALCOHOL_HEALTH = [['器官代谢', 60], ['生理酒瘾', 90], ['生育力', 150], ['心理酒瘾', 300], ['大脑神经', 1000], ['疾病风险', 3000]];
+  function elapsedDays(started) { return started ? (Date.now() - started) / 86400000 : 0; }
+  function pctText(p) {
+    if (p <= 0) return '0%';
+    if (p >= 100) return '100%';
+    return (p < 10 ? p.toFixed(1) : Math.round(p)) + '%';
+  }
+  function fmtDur(ms) {
+    if (ms < 60000) return '0分钟';
+    const mins = Math.floor(ms / 60000);
+    const d = Math.floor(mins / 1440), h = Math.floor((mins % 1440) / 60), m = mins % 60;
+    if (d > 0) return `${d}天${h}小时${m}分钟`;
+    if (h > 0) return `${h}小时${m}分钟`;
+    return `${m}分钟`;
+  }
+
+  /* ---------------- 登录 ---------------- */
+  function showLogin() { $('#login').classList.remove('hidden'); $('#app').classList.add('hidden'); }
+  function openWxAuth() {
+    const ids = Object.keys(DB.accounts);
+    const rows = ids.map((id) => {
+      const a = DB.accounts[id];
+      return `<div class="wx-account">
+        <button class="wx-pick" data-wx="${id}">
+          <span class="ava big">${a.avatar}</span>
+          <span class="wx-nick">${esc(a.nickname || '微信用户')}</span>
+          <em>${a.smoke || a.alcohol || a.fit ? '已在坚持' : '还没开始'}</em>
+        </button>
+        <button class="wx-del" data-del="${id}" title="删除这条登录记录">✕</button>
+      </div>`;
+    }).join('');
+    sheet(`<h3>微信授权</h3>
+      <p class="sheet-sub">「快乐佩奇：戒烟戒酒跟我走」申请获取你的昵称和头像</p>
+      <div class="wx-accounts">${rows || '<p class="muted tiny" style="text-align:center;padding:10px 0">还没有登录记录，新建一个吧</p>'}</div>
+      <button class="wx-new" id="wxNew"><span>＋</span>使用新的微信登录</button>
+      <p class="muted tiny" style="text-align:center;margin-top:12px">每个微信对应独立的存档，换微信就是换一份坚持</p>`);
+    $$('.wx-pick').forEach((b) => b.addEventListener('click', () => {
+      S = fixSave(DB.accounts[b.dataset.wx]);
+      DB.current = b.dataset.wx;
+      persist(); closeSheet();
+      setTimeout(enterApp, 150);
+    }));
+    $$('.wx-del').forEach((b) => b.addEventListener('click', () => delAccount(b.dataset.del)));
+    $('#wxNew').onclick = openRegForm;
+  }
+  function delAccount(id) {
+    const a = DB.accounts[id];
+    if (!a) return openWxAuth();
+    sheet(`<h3>删除这条登录记录？</h3>
+      <p class="sheet-sub">「${esc(a.nickname || '微信用户')}」的打卡记录、积分、盲盒和小秘密都会被删除，无法恢复。</p>
+      <div class="sheet-actions">
+        <button class="btn btn-ghost" id="delNo">取消</button>
+        <button class="btn btn-danger" id="delYes">删除记录</button>
+      </div>`);
+    $('#delNo').onclick = openWxAuth;
+    $('#delYes').onclick = () => {
+      delete DB.accounts[id];
+      if (DB.current === id) DB.current = null;
+      persist(); closeSheet();
+      toast('已删除该登录记录', '🗑️');
+      setTimeout(openWxAuth, 200);
+    };
+  }
+  function openRegForm() {
+    sheet(`<h3>创建角色</h3>
+      <div class="form">
+        <label>微信昵称</label>
+        <input id="regNick" maxlength="12" placeholder="给自己起个昵称">
+        <label>性别</label>
+        <div class="seg" id="regGender">
+          <button class="seg-b active" data-v="boy">👦 男孩</button>
+          <button class="seg-b" data-v="girl">👧 女孩</button>
+        </div>
+        <label>年龄</label>
+        <input id="regAge" type="number" min="1" max="120" placeholder="几岁了？">
+        <button class="btn btn-primary btn-lg" id="regGo" style="margin-top:10px">进入小镇</button>
+      </div>`);
+    $$('#regGender .seg-b').forEach((b) => b.addEventListener('click', () => {
+      $$('#regGender .seg-b').forEach((x) => x.classList.remove('active'));
+      b.classList.add('active');
+    }));
+    $('#regGo').onclick = () => {
+      const nick = $('#regNick').value.trim();
+      const age = parseInt($('#regAge').value, 10);
+      if (!nick) return toast('先给自己起个昵称吧', '✏️');
+      if (!age || age < 1) return toast('填一下年龄呀', '🎂');
+      const gender = $('#regGender .active').dataset.v;
+      S = fixSave(freshSave());
+      S.wx = { wxid: 'wx_' + Date.now().toString(36), nick };
+      S.nickname = nick; S.gender = gender; S.age = age;
+      S.avatar = pick(AVATARS);
+      DB.accounts[S.wx.wxid] = S;
+      DB.current = S.wx.wxid;
+      persist(); closeSheet();
+      setTimeout(() => { toast(`欢迎你，${nick}！`, '🎉'); enterApp(); }, 150);
+    };
+  }
+  function logout() {
+    sheet(`<h3>退出当前账号？</h3><p class="sheet-sub">退出后这个微信的坚持记录会保留，重新登录即可继续。</p>
+      <div class="sheet-actions"><button class="btn btn-ghost" id="noOut">取消</button>
+      <button class="btn btn-danger" id="yesOut">退出登录</button></div>`);
+    $('#noOut').onclick = closeSheet;
+    $('#yesOut').onclick = () => { DB.current = null; persist(); location.reload(); };
+  }
+  function resetModule(mod) {
+    const names = { smoke: '戒烟', alcohol: '戒酒', fit: '运动' };
+    sheet(`<h3>重新开始${names[mod]}？</h3><p class="sheet-sub">会清空${names[mod]}的全部打卡记录和开始时间，不能撤销。</p>
+      <div class="sheet-actions"><button class="btn btn-ghost" id="noReset">取消</button>
+      <button class="btn btn-danger" id="yesReset">重新开始</button></div>`);
+    $('#noReset').onclick = closeSheet;
+    $('#yesReset').onclick = () => {
+      S[mod] = null;
+      persist(); closeSheet();
+      toast(`已重新开始${names[mod]}`, '🌱');
+      render();
+    };
+  }
+
+  /* ---------------- 入口 ---------------- */
+  function enterApp() {
+    $('#login').classList.add('hidden');
+    $('#app').classList.remove('hidden');
+    render();
+    if (window.QuitMusic && QuitMusic.enabled()) QuitMusic.play();
+  }
+
+  /* ---------------- 打卡 ---------------- */
+  function doCheckin(mod, replyIco) {
+    const m = S[mod];
+    if (!m) return;
+    if (m.lastDate === todayStr()) return toast('今天已经打卡过啦，明天再来～', '✅');
+    if (!m.cfg.started) m.cfg.started = Date.now();     // 首次打卡才算开始
+    m.total = (m.total || 0) + 1;
+    m.lastDate = todayStr();
+    m.lastTime = Date.now();
+    if (S.pointsToday.d !== todayStr()) S.pointsToday = { d: todayStr(), n: 0 };
+    let pts = 0;
+    if (S.pointsToday.n < 3) { S.points += 1; S.pointsToday.n += 1; pts = 1; }
+    persist();
+    toast('加油，宝贝' + (pts ? '  ⭐+1' : ''), replyIco || '💪');
+    render();
+  }
+
+  /* ---------------- 场景 / 小朋友 ---------------- */
+  function sceneK(mod) {
+    const hairC = S.gender === 'boy' ? '#3d3244' : '#5a3d3d';
+    const shirt = mod === 'smoke' ? '#8fd6b8' : mod === 'alcohol' ? '#f0b48c' : '#9fc4ff';
+    if (mod === 'fit') {
+      const c = S.fit && S.fit.cfg;
+      let body = 'normal';
+      if (c && c.h && c.w) {
+        const bmi = c.w / Math.pow(c.h / 100, 2);
+        body = bmi > 23.9 ? 'fat' : bmi < 18.5 ? 'thin' : 'normal';
+      }
+      return { gender: S.gender, stage: 2, body, hairC, shirt };
+    }
+    const m = S[mod];
+    const years = m.cfg.years;
+    const stage = QuitArt.stageOf(years, m.total || 0);
+    return { gender: S.gender, stage, hairC, shirt, iv: mod === 'alcohol' && years > 10 && (m.total || 0) < 5 };
+  }
+  function isDay() {
+    const f = localStorage.getItem('quitwalk_force_period');
+    if (f === 'day') return true;
+    if (f === 'night') return false;
+    const h = new Date().getHours();
+    return h >= 7 && h < 19;
+  }
+  function stageHTML(mod, goalText) {
+    const sceneSvg = QuitArt.scene(isDay() ? 'day' : 'night', sceneIdxs[mod], sceneK(mod));
+    return `<div class="stage">
+      ${sceneSvg}
+      <button class="scene-btn" data-act="scene" title="换个场景">🖼️</button>
+      <div class="goal-banner">${goalText}</div>
+      ${S.signature ? `<div class="goal-sign">“${esc(S.signature)}”</div>` : ''}
+    </div>`;
+  }
+  function titleBar(mod, list) {
+    return `<div class="title-bar">
+      ${titleBadge(list, S[mod].total || 0)}
+      <button class="lv-mini" data-lv="${mod}">等级说明</button>
+    </div>`;
+  }
+  function titleBadge(list, days) {
+    const t = titleOf(list, days);
+    return `<button class="title-badge" data-act="titleInfo"><span class="tb-ico">🎖️</span>${t[1]}<small>· 第 ${days} 天</small></button>`;
+  }
+  function healthHTML(list, started) {
+    const days = elapsedDays(started);
+    const rows = list.map(([name, dur]) => {
+      const p = Math.min(100, days / dur * 100);
+      return `<div class="hp-row"><span class="hp-name">${name}</span>
+        <div class="hp-bar"><i style="width:${p}%"></i></div><b class="hp-pct ${p >= 100 ? 'gold' : ''}">${pctText(p)}</b></div>`;
+    }).join('');
+    return `<div class="card"><h3>🌿 健康总览</h3>${rows}</div>`;
+  }
+  function statsRow(items) {
+    return `<div class="stats-grid">${items.map(([k, v]) => `<div class="stat"><small>${k}</small><b>${v}</b></div>`).join('')}</div>`;
+  }
+  function bindScene() {
+    const b = $('.scene-btn');
+    if (b) b.addEventListener('click', () => { sceneIdxs[tab] = 1 - sceneIdxs[tab]; render(); });
+  }
+  function bindTitle(list, mod) {
+    const tb = $('.title-badge');
+    if (tb) tb.addEventListener('click', () => {
+      const t = titleOf(list, S[mod].total || 0);
+      sheet(`<h3>🎖️ ${t[1]}</h3><p class="sheet-sub">${t[2]}</p>
+        <p class="muted tiny">打卡断了也不影响称号，随时可以接着打。当前累计打卡 ${S[mod].total || 0} 天。</p>
+        <button class="btn btn-primary btn-lg" onclick="document.querySelector('.sheet-mask').remove()">知道啦</button>`);
+    });
+  }
+  function levelsSheet(list, mod) {
+    const total = (S[mod] && S[mod].total) || 0;
+    const rows = list.map(([d, name, desc]) => `<div class="lv-row ${total >= d && total > 0 ? '' : ''}">
+      <span class="lv-day">${d === 0 ? '未打卡' : '第 ' + d + ' 天'}</span>
+      <span class="lv-name">${name}</span>
+      <small>${desc}</small></div>`).join('');
+    sheet(`<h3>🏅 等级说明</h3><p class="sheet-sub">按累计打卡天数升级，断了也不掉级</p>
+      <div class="lv-list">${rows}</div>
+      <button class="btn btn-primary btn-lg" style="margin-top:12px" onclick="document.querySelector('.sheet-mask').remove()">看完了</button>`);
+  }
+  function infoCard(mod, title, fieldsHtml, saveHandler) {
+    const open = infoOpen[mod];
+    const el = `<div class="card info-card">
+      <button class="info-toggle" data-info="${mod}">⚙️ 基本信息 <em>${open ? '收起' : '点击展开'}</em></button>
+      <div class="info-body ${open ? '' : 'hidden'}" id="info_${mod}">
+        <div class="form form-row">${fieldsHtml}</div>
+        <button class="btn btn-ghost sm save-btn" id="save_${mod}">保存修改</button>
+        <button class="btn btn-danger sm restart-btn" data-restart="${mod}">🔄 重新开始${title}</button>
+      </div>
+    </div>`;
+    return el;
+  }
+  function bindInfo(mod, handler) {
+    const tb = $(`[data-info="${mod}"]`);
+    if (tb) tb.addEventListener('click', () => { infoOpen[mod] = !infoOpen[mod]; render(); });
+    const sb = $(`#save_${mod}`);
+    if (sb) sb.onclick = handler;
+    const rb = $(`[data-restart="${mod}"]`);
+    if (rb) rb.onclick = () => resetModule(mod);
+  }
+
+  /* ---------------- 戒烟 ---------------- */
+  function renderSmoke() {
+    const m = S.smoke;
+    if (!m || !m.cfg) return smokeForm();
+    const days = elapsedDays(m.cfg.started);
+    const cigs = days * m.cfg.cigs;
+    const money = days * m.cfg.cigs / 20 * m.cfg.price;
+    const life = (days * 0.3).toFixed(1);
+    const started = m.cfg.started;
+    const t = titleOf(SMOKE_TITLES, m.total || 0);
+    const today = m.lastDate === todayStr();
+
+    $('#main').innerHTML = `
+      ${stageHTML('smoke', '断崖式戒烟，目标100天！')}
+      <div class="dock">
+        <button class="act" data-act="hug">🤗 抱一抱</button>
+        <button class="act" data-act="punch">👊 打一拳</button>
+        <button class="act" data-act="chest">🩻 胸部检查</button>
+        <button class="act primary" data-act="checkin" ${today ? 'disabled' : ''}>${today ? '✅ 今日已打卡' : '戒烟打卡'}</button>
+      </div>
+      ${titleBar('smoke', SMOKE_TITLES)}
+      <div class="card">
+        <h3>📊 戒烟数据</h3>
+        ${statsRow([
+          ['开始戒烟', started ? startLabel(started) : '未开始'],
+          ['已戒烟', started ? fmtDur(Date.now() - started) : '未开始'],
+          ['累计少吸', cigs.toFixed(1) + ' 支'],
+          ['节省金额', money.toFixed(1) + ' 元'],
+          ['寿命', life + ' 天']
+        ])}
+      </div>
+      ${healthHTML(SMOKE_HEALTH, started)}
+      ${infoCard('smoke', '戒烟', `
+        <div><label>烟龄（年）</label><input id="eYears" type="number" min="0" value="${m.cfg.years}"></div>
+        <div><label>每天（支）</label><input id="eCigs" type="number" min="1" value="${m.cfg.cigs}"></div>
+        <div><label>元/包</label><input id="ePrice" type="number" min="1" step="0.5" value="${m.cfg.price}"></div>
+        <div style="flex-basis:100%"><label>个性签名</label><input id="eSign" maxlength="20" value="${esc(S.signature || '')}"></div>`)}
+    `;
+    bindScene(); bindTitle(SMOKE_TITLES, 'smoke');
+    const kidBox = () => $('.scene-kid');
+    $$('.act').forEach((b) => b.addEventListener('click', () => {
+      const a = b.dataset.act;
+      if (a === 'hug') { anim(kidBox(), 'jump'); toast(pick(['爱你哦～', '抱抱最温暖啦', '嘿嘿，被你抱住啦']), '🤗'); }
+      if (a === 'punch') { anim(kidBox(), 'shake'); toast(pick(['我错了', '别打脸！', '呜呜下次不敢了']), '👊'); }
+      if (a === 'chest') openChest();
+      if (a === 'checkin') doCheckin('smoke', '🚭');
+    }));
+    bindInfo('smoke', () => {
+      S.smoke.cfg.years = Math.max(0, parseInt($('#eYears').value, 10) || 0);
+      S.smoke.cfg.cigs = Math.max(1, parseInt($('#eCigs').value, 10) || 20);
+      S.smoke.cfg.price = Math.max(0.5, parseFloat($('#ePrice').value) || 10);
+      S.signature = $('#eSign').value.trim();
+      persist(); toast('已保存', '✏️'); render();
+    });
+    const lv = $('[data-lv="smoke"]');
+    if (lv) lv.onclick = () => levelsSheet(SMOKE_TITLES, 'smoke');
+  }
+
+  function smokeForm() {
+    $('#main').innerHTML = `
+      <div class="card setup-card">
+        <h3>🚬 开始戒烟</h3>
+        <p class="muted tiny">先填几项基本信息，开始时间从你第一次打卡开始算</p>
+        <div class="form">
+          <label>烟龄（年）</label><input id="smYears" type="number" min="0" max="80" value="10">
+          <label>每天抽烟数量（支）</label><input id="smCigs" type="number" min="1" max="100" value="20">
+          <label>香烟价格（元/包 20支）</label><input id="smPrice" type="number" min="1" step="0.5" value="10">
+          <label>个性签名（选填）</label><input id="smSign" maxlength="20" placeholder="默认：无语中..">
+          <button class="btn btn-primary btn-lg" id="smGo" style="margin-top:12px">断崖式戒烟，开始！</button>
+        </div>
+      </div>`;
+    $('#smGo').onclick = () => {
+      const years = Math.max(0, parseInt($('#smYears').value, 10) || 0);
+      const cigs = Math.max(1, parseInt($('#smCigs').value, 10) || 20);
+      const price = Math.max(0.5, parseFloat($('#smPrice').value) || 10);
+      const sign = $('#smSign').value.trim() || '无语中..';
+      S.smoke = { cfg: { years, cigs, price, started: null }, total: 0, lastDate: '', lastTime: null, kidName: '' };
+      S.signature = sign;
+      persist();
+      toast('填好啦，点打卡就算正式开始！', '🚬');
+      render();
+    };
+  }
+
+  function openChest() {
+    const gone = Math.min(100, S.smoke.total || 0);
+    sheet(`<h3>🩻 胸部检查</h3><div class="organ-box">${QuitArt.lungs(gone)}</div>`);
+  }
+
+  /* ---------------- 戒酒 ---------------- */
+  function renderAlcohol() {
+    const m = S.alcohol;
+    if (!m || !m.cfg) return alcoholForm();
+    const days = elapsedDays(m.cfg.started);
+    const bj = (days * m.cfg.baijiu).toFixed(1);
+    const beer = (days * m.cfg.bottle).toFixed(1);
+    const money = days * (m.cfg.baijiu * m.cfg.baijiuP + m.cfg.bottle * m.cfg.bottleP);
+    const life = (days * 0.3).toFixed(1);
+    const started = m.cfg.started;
+    const today = m.lastDate === todayStr();
+
+    $('#main').innerHTML = `
+      ${stageHTML('alcohol', '保持清醒，目标 100 天！')}
+      <div class="dock">
+        <button class="act" data-act="kick">🦵 踹一脚</button>
+        <button class="act" data-act="pat">🖐️ 拍拍肩</button>
+        <button class="act" data-act="liver">🫀 肝脏检查</button>
+        <button class="act primary" data-act="checkin" ${today ? 'disabled' : ''}>${today ? '✅ 今日已打卡' : '戒酒打卡'}</button>
+      </div>
+      ${titleBar('alcohol', ALCOHOL_TITLES)}
+      <div class="card">
+        <h3>📊 戒酒数据</h3>
+        ${statsRow([
+          ['开始戒酒', started ? startLabel(started) : '未开始'],
+          ['已戒酒', started ? fmtDur(Date.now() - started) : '未开始'],
+          ['少喝白酒', bj + ' 斤'],
+          ['少喝啤酒', beer + ' 瓶'],
+          ['节省金额', money.toFixed(1) + ' 元'],
+          ['寿命', life + ' 天']
+        ])}
+      </div>
+      ${healthHTML(ALCOHOL_HEALTH, started)}
+      ${infoCard('alcohol', '戒酒', `
+        <div><label>酒龄（年）</label><input id="aYears" type="number" min="0" value="${m.cfg.years}"></div>
+        <div><label>白酒（斤/天）</label><input id="aBJ" type="number" min="0" step="0.1" value="${m.cfg.baijiu}"></div>
+        <div><label>白酒 元/斤</label><input id="aBJP" type="number" min="0" value="${m.cfg.baijiuP}"></div>
+        <div><label>啤酒（瓶/天）</label><input id="aBeer" type="number" min="0" value="${m.cfg.bottle}"></div>
+        <div><label>啤酒 元/瓶</label><input id="aBeerP" type="number" min="0" step="0.5" value="${m.cfg.bottleP}"></div>
+        <div style="flex-basis:100%"><label>个性签名</label><input id="aSign" maxlength="20" value="${esc(S.signature || '')}"></div>`)}
+    `;
+    bindScene(); bindTitle(ALCOHOL_TITLES, 'alcohol');
+    const kidBox = () => $('.scene-kid');
+    $$('.act').forEach((b) => b.addEventListener('click', () => {
+      const a = b.dataset.act;
+      if (a === 'kick') { anim(kidBox(), 'shake'); toast(pick(['哎哟！我错了', '再也不喝了', '疼疼疼，知道错了']), '🦵'); }
+      if (a === 'pat') { anim(kidBox(), 'nod'); toast(pick(['肩膀都松快了', '谢谢你的手', '一下子清醒了']), '🖐️'); }
+      if (a === 'liver') openLiver();
+      if (a === 'checkin') doCheckin('alcohol', '🍺');
+    }));
+    bindInfo('alcohol', () => {
+      const c = S.alcohol.cfg;
+      c.years = Math.max(0, parseInt($('#aYears').value, 10) || 0);
+      c.baijiu = Math.max(0, parseFloat($('#aBJ').value) || 0);
+      c.baijiuP = Math.max(0, parseFloat($('#aBJP').value) || 0);
+      c.bottle = Math.max(0, parseFloat($('#aBeer').value) || 0);
+      c.bottleP = Math.max(0, parseFloat($('#aBeerP').value) || 0);
+      S.signature = $('#aSign').value.trim();
+      persist(); toast('已保存', '✏️'); render();
+    });
+    const lv = $('[data-lv="alcohol"]');
+    if (lv) lv.onclick = () => levelsSheet(ALCOHOL_TITLES, 'alcohol');
+  }
+
+  function alcoholForm() {
+    $('#main').innerHTML = `
+      <div class="card setup-card">
+        <h3>🍺 开始戒酒</h3>
+        <p class="muted tiny">填一下基本信息，看看小朋友现在被酒泡成什么样了</p>
+        <div class="form">
+          <label>酒龄（年）</label><input id="alYears" type="number" min="0" max="80" value="10">
+          <label>平均每天白酒（斤）</label><input id="alBJ" type="number" min="0" step="0.1" value="1">
+          <label>白酒价格（元/斤）</label><input id="alBJP" type="number" min="0" value="50">
+          <label>平均每天啤酒（瓶 500ML）</label><input id="alBeer" type="number" min="0" value="2">
+          <label>啤酒价格（元/瓶 500ML）</label><input id="alBeerP" type="number" min="0" step="0.5" value="3">
+          <label>个性签名（选填）</label><input id="alSign" maxlength="20" placeholder="默认：无语中..">
+          <button class="btn btn-primary btn-lg" id="alGo" style="margin-top:12px">保持清醒，开始！</button>
+        </div>
+      </div>`;
+    $('#alGo').onclick = () => {
+      S.alcohol = {
+        cfg: {
+          years: Math.max(0, parseInt($('#alYears').value, 10) || 0),
+          baijiu: Math.max(0, parseFloat($('#alBJ').value) || 0),
+          baijiuP: Math.max(0, parseFloat($('#alBJP').value) || 0),
+          bottle: Math.max(0, parseFloat($('#alBeer').value) || 0),
+          bottleP: Math.max(0, parseFloat($('#alBeerP').value) || 0),
+          started: null
+        }, total: 0, lastDate: '', lastTime: null
+      };
+      const sg = $('#alSign').value.trim();
+      if (sg) S.signature = sg;
+      persist();
+      toast('填好啦，点打卡就算正式开始！', '🍺');
+      render();
+    };
+  }
+
+  function openLiver() {
+    const gone = Math.min(100, S.alcohol.total || 0);
+    sheet(`<h3>🫀 肝脏检查</h3><div class="organ-box">${QuitArt.liver(gone)}</div>`);
+  }
+
+  function openBelly() {
+    const gone = Math.min(100, S.fit.total || 0);
+    sheet(`<h3>🫃 体脂检查</h3><div class="organ-box">${QuitArt.belly(gone)}</div>`);
+  }
+
+  /* ---------------- 减肥健身 ---------------- */
+  function renderFit() {
+    const m = S.fit;
+    if (!m || !m.cfg) return fitForm();
+    const c = m.cfg;
+    const bmi = c.w / Math.pow(c.h / 100, 2);
+    const today = m.lastDate === todayStr();
+
+    $('#main').innerHTML = `
+      ${stageHTML('fit', '生命在于运动，目标360天！')}
+      <div class="dock">
+        <button class="act" data-act="pat">🤚 摸摸头</button>
+        <button class="act" data-act="feed">🍗 疯狂喂食</button>
+        <button class="act" data-act="belly">🫃 体脂检查</button>
+        <button class="act primary" data-act="checkin" ${today ? 'disabled' : ''}>${today ? '✅ 今日已打卡' : '运动打卡'}</button>
+      </div>
+      ${titleBar('fit', FIT_TITLES)}
+      <div class="card">
+        <h3>📊 运动数据</h3>
+        ${statsRow([['BMI', bmi.toFixed(1)], ['身材', bmi > 23.9 ? '偏胖' : bmi < 18.5 ? '偏瘦' : '完美'], ['已坚持', (m.total || 0) + ' 天']])}
+      </div>
+      ${infoCard('fit', '健身', `
+        <div><label>身高（cm）</label><input id="fH" type="number" min="50" max="250" value="${c.h}"></div>
+        <div><label>体重（kg）</label><input id="fW" type="number" min="10" max="400" step="0.1" value="${c.w}"></div>
+        <div style="flex-basis:100%"><label>个性签名</label><input id="fSign" maxlength="20" value="${esc(S.signature || '')}"></div>`)}
+    `;
+    bindScene(); bindTitle(FIT_TITLES, 'fit');
+    const kidBox = () => $('.scene-kid');
+    $$('.act').forEach((b) => b.addEventListener('click', () => {
+      const a = b.dataset.act;
+      if (a === 'pat') { anim(kidBox(), 'nod'); toast(pick(['好舒服呀', '头头被摸聪明了', '再摸摸～']), '🤚'); }
+      if (a === 'feed') {
+        anim(kidBox(), 'eat');
+        toast(pick(['嗷呜——好吃！', '咔嚓咔嚓真香', bmi > 23.9 ? '再喂真要成球啦！' : '能量满满，练起来！']), '🍗');
+      }
+      if (a === 'belly') openBelly();
+      if (a === 'checkin') doCheckin('fit', '🏃');
+    }));
+    bindInfo('fit', () => {
+      c.h = Math.max(50, parseFloat($('#fH').value) || 0);
+      c.w = Math.max(10, parseFloat($('#fW').value) || 0);
+      S.signature = $('#fSign').value.trim();
+      persist(); toast('已保存', '✏️'); render();
+    });
+    const lv = $('[data-lv="fit"]');
+    if (lv) lv.onclick = () => levelsSheet(FIT_TITLES, 'fit');
+  }
+
+  function fitForm() {
+    $('#main').innerHTML = `
+      <div class="card setup-card">
+        <h3>🏃 开始健身打卡</h3>
+        <p class="muted tiny">填一下身高体重，小朋友会变成你的抽象身材镜子</p>
+        <div class="form">
+          <label>身高（cm）</label><input id="ftH" type="number" min="50" max="250" placeholder="例如 170">
+          <label>体重（kg）</label><input id="ftW" type="number" min="10" max="400" step="0.1" placeholder="例如 65">
+          <button class="btn btn-primary btn-lg" id="ftGo" style="margin-top:12px">生命在于运动，开始！</button>
+        </div>
+      </div>`;
+    $('#ftGo').onclick = () => {
+      const h = parseFloat($('#ftH').value), w = parseFloat($('#ftW').value);
+      if (!h || !w) return toast('身高体重都要填哦', '📏');
+      S.fit = { cfg: { h, w, started: Date.now() }, total: 0, lastDate: '', lastTime: null };
+      persist();
+      const bmi = w / Math.pow(h / 100, 2);
+      toast(bmi > 23.9 ? '胖成球的小盆友来陪你练！' : bmi < 18.5 ? '瘦成棍的小盆友来陪你吃！' : '完美身材的小伙伴来啦！', '🏃');
+      render();
+    };
+  }
+
+  /* ---------------- 佩奇 ---------------- */
+  const NOTES = [
+    '顺其自然，随遇而安。（《庄子》）',
+    '本来无一物，何处惹尘埃。（惠能）',
+    '人生如逆旅，我亦是行人。（苏轼）',
+    '乱花渐欲迷人眼，浅草才能没马蹄。（白居易）',
+    '知足者常乐，终身不辱。（老子）',
+    '盛年不重来，一日难再晨。（陶渊明）',
+    '浆声灯影里的日子，过一天，少一天。（朱自清）',
+    '水满则溢，月盈则亏。（《淮南子》）',
+    '天下事有难易乎？为之，则难者亦易矣。（彭端淑）',
+    '临渊羡鱼，不如退而结网。（《汉书》）',
+  ];
+  /* 点头像时的回应（睡着时不回应） */
+  const TAP_LINES = {
+    peki: [['嘿嘿，被你戳到啦', '🐷'], ['我在呢我在呢', '🐷'], ['摸摸头～', '🥰'], ['今天也要好好加油鸭', '💪']],
+    girl: [['诶？是在叫我吗', '👧'], ['我叫小美，你好呀', '👧'], ['佩奇的朋友就是我', '✨'], ['别戳啦，痒痒的', '😆']],
+    mini: [['小小的我在这里', '✨'], ['我是小佩奇', '✨'], ['戳我干嘛呀', '😝'], ['嘿咻～', '🌟']],
+  };
+  const FEED_CD = 5 * 60 * 1000;
+  const PK_DUR = 24 * 3600 * 1000;
+  const TEASE_CD = 60 * 1000;
+  const DOG_AT = 50;
+  const JOY_MAX = 10 * 60 * 1000;
+  const DAY = 86400000;
+  const LIFE_FOODS = ['apple', 'cake', 'mushroom'];
+  let pkClockTimer = null;
+  let feedTimer = null;
+
+  /* 生命值：苹果 / 蛋糕 / 蘑菇 各贡献 1 天，随现实时间持续消耗，三者都归零才离开 */
+  function lifeLeft(st) {
+    const now = Date.now();
+    return LIFE_FOODS.reduce((sum, k) => sum + Math.max(0, Math.min(DAY, (st.life[k] || 0) - now)), 0);
+  }
+  function lifePct(st) {
+    return Math.round(lifeLeft(st) / (DAY * 3) * 100);
+  }
+  function effectPct(st, k) {
+    const until = k === 'apple' ? st.ghostUntil : k === 'cake' ? st.bigUntil : st.girlUntil;
+    return Math.round(Math.max(0, until - Date.now()) / PK_DUR * 100);
+  }
+
+  function clockText() {
+    const t = S.clock && S.clock.target;
+    if (!t) return '⏰ 小闹钟 · 点我设倒计时';
+    const left = t - Date.now();
+    if (left <= 0) return '⏰ 时间到啦！🎉';
+    const d = Math.floor(left / 86400000), h = Math.floor((left % 86400000) / 3600000), m = Math.floor((left % 3600000) / 60000);
+    return `⏰ 距离目标还剩 ${d}天${h}小时${m}分`;
+  }
+
+  function openClock() {
+    if (!S.clock || typeof S.clock !== 'object') S.clock = { target: 0 };
+    const cur = S.clock.target;
+    const d = cur > Date.now() ? new Date(cur) : new Date(Date.now() + 100 * 86400000);
+    const pad = (n) => String(n).padStart(2, '0');
+    const val = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    sheet(`<h3>⏰ 小闹钟</h3>
+      <p class="sheet-sub">定一个目标时间，页面顶部会一直显示倒计时</p>
+      <div class="form">
+        <label>目标时间</label>
+        <input id="clockTime" type="datetime-local" value="${val}">
+        <div class="clock-presets">
+          <button class="btn btn-ghost" data-p="7">7 天</button>
+          <button class="btn btn-ghost" data-p="30">30 天</button>
+          <button class="btn btn-ghost" data-p="100">100 天</button>
+        </div>
+      </div>
+      <div class="sheet-actions">
+        ${cur ? '<button class="btn btn-ghost" id="clockDel">删除闹钟</button>' : '<button class="btn btn-ghost" id="clockNo">取消</button>'}
+        <button class="btn btn-primary" id="clockSave">保存</button>
+      </div>`);
+    $$('.clock-presets .btn').forEach((b) => b.onclick = () => {
+      const t = new Date(Date.now() + parseInt(b.dataset.p, 10) * 86400000);
+      $('#clockTime').value = `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}T${pad(t.getHours())}:${pad(t.getMinutes())}`;
+    });
+    $('#clockSave').onclick = () => {
+      const t = new Date($('#clockTime').value).getTime();
+      if (!t || t <= Date.now()) return toast('要定一个将来的时间哦', '⏰');
+      S.clock.target = t;
+      persist(); closeSheet();
+      toast('小闹钟设好啦', '⏰');
+      renderPeki();
+    };
+    const cNo = $('#clockNo');
+    if (cNo) cNo.onclick = closeSheet;
+    const cDel = $('#clockDel');
+    if (cDel) cDel.onclick = () => { S.clock.target = 0; persist(); closeSheet(); renderPeki(); };
+  }
+
+  function spawnCat() {
+    if (tab !== 'peki') return;
+    const svg = document.querySelector('.peki-stage .scene-svg');
+    if (!svg) return;
+    const NS = 'http://www.w3.org/2000/svg';
+    const outer = document.createElementNS(NS, 'g');
+    outer.setAttribute('transform', 'translate(648 500) scale(1.45)');
+    const inner = document.createElementNS(NS, 'g');
+    inner.innerHTML = QuitArt.catSit();
+    outer.appendChild(inner);
+    svg.appendChild(outer);
+    inner.classList.add('cat-drop');
+    toast('🐱 喵呜…', '🐱');
+    setTimeout(() => inner.classList.replace('cat-drop', 'cat-lick'), 2400);
+    setTimeout(() => inner.classList.replace('cat-lick', 'cat-leave'), 6400);
+    setTimeout(() => outer.remove(), 8300);
+  }
+  const STARVE = 3 * 24 * 3600 * 1000;
+
+  function pkState() {
+    if (!S.peki || typeof S.peki !== 'object') S.peki = {};
+    const st = S.peki;
+    if (typeof st.charm !== 'number') st.charm = 0;
+    ['lastFeed', 'lastTease', 'ghostUntil', 'bigUntil', 'girlUntil', 'ptUntil'].forEach((k) => {
+      if (typeof st[k] !== 'number') st[k] = 0;
+    });
+    if (typeof st.dead !== 'boolean') st.dead = false;
+    if (typeof st.teaseCount !== 'number') st.teaseCount = 0;
+    if (typeof st.cheerTotal !== 'number') st.cheerTotal = 0;
+    if (typeof st.joy !== 'number') st.joy = 0;
+    /* 快乐值 = 剩余快乐额度（上限 10 分钟），用到期时间戳存，随时间实时减少 */
+    if (typeof st.joyUntil !== 'number' || !(st.joyUntil > 0)) st.joyUntil = Date.now() + Math.max(0, Math.min(10, st.joy)) * 60000;
+    if (!st.lastFeed) st.lastFeed = Date.now();
+    if (!st.life || typeof st.life !== 'object') {
+      /* 老存档迁移：原来 3 天不喂才离开，等于三种食物各留 1 天 */
+      const base = st.lastFeed;
+      st.life = { apple: base + DAY, cake: base + DAY, mushroom: base + DAY };
+    }
+    LIFE_FOODS.forEach((k) => { if (typeof st.life[k] !== 'number') st.life[k] = 0; });
+    return st;
+  }
+  /* 剩余快乐毫秒数（0 ~ 10 分钟） */
+  function joyLeft(st) {
+    return Math.max(0, Math.min(JOY_MAX, (st.joyUntil || 0) - Date.now()));
+  }
+  function pkTick() {
+    const st = pkState();
+    if (!st.dead && lifeLeft(st) <= 0) {
+      st.dead = true;
+      st.charm = 0;
+      st.joy = 0;
+      st.joyUntil = 0;
+      st.ghostUntil = st.bigUntil = st.girlUntil = 0;
+      persist();
+    }
+    if (!st.dead) st.joy = joyLeft(st) / 60000;
+    return st;
+  }
+  function fmtLeft(ms) {
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    if (s >= 3600) return Math.floor(s / 3600) + '小时' + (Math.floor((s % 3600) / 60) ? Math.floor((s % 3600) / 60) + '分' : '');
+    if (s >= 60) return Math.floor(s / 60) + '分' + (s % 60) + '秒';
+    return s + '秒';
+  }
+
+  function openFeed() {
+    const st = pkTick();
+    if (st.dead) return toast('佩奇已经不在了…', '🪦');
+    const now = Date.now();
+    const cd = FEED_CD - (now - st.lastFeed);
+    const items = [
+      ['apple', '🍎', '苹果', st.ghostUntil > now],
+      ['cake', '🍰', '蛋糕', st.bigUntil > now],
+      ['mushroom', '🍄', '蘑菇', st.girlUntil > now],
+    ];
+    sheet(`<h3>🍽️ 喂佩奇吃点东西</h3>
+      <p class="sheet-sub">${cd > 0 ? `刚喂过啦，${fmtLeft(cd)} 后才能再喂` : '每 5 分钟可以喂一次，效果持续 24 小时'}</p>
+      <div class="food-list">${items.map(([k, ico, nm, on]) => {
+        const pc = effectPct(st, k);
+        return `<button class="food-row" data-food="${k}" ${cd > 0 ? 'disabled' : ''}>
+        <span class="food-ico">${ico}</span>
+        <span class="food-main">
+          <b>${nm}${on ? '<em class="on">生效中 +1</em>' : ''}</b>
+          <span class="food-meter"><span class="food-bar"><i data-bar="${k}" style="width:${pc}%"></i></span><em data-pct="${k}">${pc}%</em></span>
+        </span>
+      </button>`;
+      }).join('')}</div>`);
+    $$('.food-row').forEach((b) => { b.onclick = () => feedPeki(b.dataset.food); });
+    clearInterval(feedTimer);
+    feedTimer = setInterval(() => {
+      if (!$('.food-row')) return clearInterval(feedTimer);
+      const nowSt = pkState();
+      $$('[data-bar]').forEach((el) => { el.style.width = effectPct(nowSt, el.dataset.bar) + '%'; });
+      $$('[data-pct]').forEach((el) => { el.textContent = effectPct(nowSt, el.dataset.pct) + '%'; });
+    }, 60000);
+  }
+
+  function feedPeki(kind) {
+    const st = pkTick();
+    if (st.dead) return;
+    const now = Date.now();
+    const cd = FEED_CD - (now - st.lastFeed);
+    if (cd > 0) { closeSheet(); return toast(`佩奇刚吃过，${fmtLeft(cd)} 后再喂`, '⏳'); }
+    st.lastFeed = now;
+    st.life[kind] = now + DAY;
+    let msg = '', ico = '🍽️', gotCharm = false;
+    if (kind === 'apple') {
+      if (st.ghostUntil > now) { st.charm += 1; gotCharm = true; msg = '佩奇已经在泡澡啦，魅力 +1'; }
+      else { st.ghostUntil = now + PK_DUR; msg = '佩奇跳进洗澡池里啦！'; }
+      ico = '👻';
+    } else if (kind === 'cake') {
+      if (st.bigUntil > now) { st.charm += 1; gotCharm = true; msg = '脑袋已经很大了，魅力 +1'; }
+      else { st.bigUntil = now + PK_DUR; msg = '佩奇的脑袋大了一圈！'; }
+      ico = '🍰';
+    } else {
+      if (st.girlUntil > now) { st.charm += 1; gotCharm = true; msg = '女孩已经在啦，魅力 +1'; }
+      else { st.girlUntil = now + PK_DUR; msg = '旁边出现了一个双马尾女孩！'; }
+      ico = '🍄';
+    }
+    persist();
+    closeSheet();
+    toast(gotCharm ? `${msg} · 魅力 ${st.charm}` : msg, ico);
+    renderPeki();
+  }
+
+  function teasePeki() {
+    const st = pkTick();
+    if (st.dead) return toast('佩奇已经不在了…', '🪦');
+    if (joyLeft(st) <= 0) return toast('佩奇睡着啦，先陪它玩一下～', '😴');
+    const now = Date.now();
+    const left = TEASE_CD - (now - st.lastTease);
+    if (left > 0) return toast(`佩奇喘口气，${Math.ceil(left / 1000)} 秒后再逗`, '⏳');
+    st.lastTease = now;
+    st.teaseCount = (st.teaseCount || 0) + 1;
+    const catDue = st.teaseCount >= 10;
+    if (catDue) st.teaseCount = 0;
+    /* 逗一逗也能加分：每次 +1 分，一天最多 2 分 */
+    if (!S.teaseToday || typeof S.teaseToday !== 'object' || S.teaseToday.d !== todayStr()) S.teaseToday = { d: todayStr(), n: 0 };
+    let tp = 0;
+    if (S.teaseToday.n < 2) { S.points += 1; S.teaseToday.n += 1; tp = 1; }
+    persist();
+    const el = $('.peki-kid');
+    if (el) { el.classList.remove('dance'); void el.offsetWidth; el.classList.add('dance'); setTimeout(() => el.classList.remove('dance'), 5100); }
+    toast(pick(['佩奇跳起了小舞～', '扭起来了！', '佩奇：快看我表演']) + (tp ? '  ⭐+1' : ''), '💃');
+    if (catDue) setTimeout(spawnCat, 900);
+    updatePekiBtns();
+    const dt = $('#todayPts');
+    if (dt) dt.textContent = todayPoints() + '/5';
+    const cp = $('#curPts');
+    if (cp) cp.textContent = S.points;
+  }
+
+  function playPeki() {
+    const st = pkTick();
+    if (st.dead) return toast('佩奇已经不在了…', '🪦');
+    const now = Date.now();
+    const left = joyLeft(st);
+    const wasFull = left >= JOY_MAX - 1000;
+    const wasAsleep = left <= 0;
+    /* 玩耍 +1 分钟快乐，上限 10 分钟（已经归零就从现在重新算） */
+    if (!wasFull) st.joyUntil = Math.min(now + JOY_MAX, Math.max(now, st.joyUntil) + 60000);
+    st.joy = joyLeft(st) / 60000;
+    persist();
+    if (wasAsleep) {
+      renderPeki();
+      toast(pick(['唔…睡醒了！', '佩奇揉揉眼睛爬起来啦', '呀，你回来啦～']), '🌞');
+      return;
+    }
+    if (wasFull) toast(pick(['我很快乐！！', '已经快乐到满格啦～', '嘿嘿，我超快乐！']), '🌈');
+    else toast(pick(['佩奇开心地转圈圈', '嘿嘿，最喜欢和你玩啦', '再来一次！', '佩奇笑得眼睛都没了']), '🎈');
+    const fill = $('#joyFill'), txt = $('#joyTxt');
+    if (fill) fill.style.width = (st.joy * 10).toFixed(1) + '%';
+    if (txt) txt.textContent = st.joy.toFixed(1) + '/10 分';
+  }
+
+  function updatePekiBtns() {
+    const st = pkState();
+    if (st.dead) return;
+    const now = Date.now();
+    const fb = $('#feedBtn'), tb = $('#teaseBtn');
+    if (fb) {
+      const d = FEED_CD - (now - st.lastFeed);
+      fb.innerHTML = d > 0 ? `🍽️ 冷却 ${fmtLeft(d)}` : '🍽️ 喂食';
+    }
+    if (tb) {
+      const d = TEASE_CD - (now - st.lastTease);
+      tb.innerHTML = d > 0 ? `💃 冷却 ${Math.ceil(d / 1000)}s` : '💃 逗一逗';
+    }
+  }
+
+  function pekiRules() {
+    sheet(`<h3>📖 佩奇规则说明</h3>
+      <div class="rule-list">
+        <p><b>🍽️ 喂食</b>每 5 分钟可以喂一次，每次选苹果、蛋糕或蘑菇其中的一样。</p>
+        <p><b>🍎 苹果</b>佩奇跳进一个大洗澡池里泡澡（有泡泡和小黄鸭），持续 24 小时。</p>
+        <p><b>🍰 蛋糕</b>佩奇脑袋变大 30%，持续 24 小时。</p>
+        <p><b>🍄 蘑菇</b>佩奇旁边出现一个漂亮的双马尾女孩，持续 24 小时。</p>
+        <p><b>＋1 魅力</b>状态已经在生效时，再喂同一样东西，魅力值 +1。</p>
+        <p><b>💃 逗一逗</b>每 1 分钟可以逗一次，佩奇会跳舞 5 秒。</p>
+        <p><b>🎁 盲盒</b>戒烟、戒酒、运动每打卡一次 +1 积分，一天最多 3 积分；逗一逗佩奇每次 +1 积分，一天最多 2 积分。20 积分抽一个盲盒，随机抽。</p>
+        <p><b>⏰ 小闹钟</b>点顶部的「小闹钟」可以定一个目标时间，之后会一直显示距离目标还剩多少天多少小时多少分。</p>
+        <p><b>✨ 小佩奇</b>魅力 10 / 50 / 200 会出现 1 / 2 / 3 个小佩奇，发色依次是黄、白、红，最多 3 个。</p>
+        <p><b>🪦 会离开</b>现实时间 3 天没有喂佩奇，佩奇就会离开，魅力值清零。之后可以重新养一只。</p>
+      </div>
+      <button class="btn btn-primary btn-lg" style="margin-top:14px" onclick="document.querySelector('.sheet-mask').remove()">看完了</button>`);
+  }
+
+  function revivePeki() {
+    sheet(`<h3>重新养一只佩奇？</h3>
+      <p class="sheet-sub">魅力值从 0 开始，之前的洗澡池、大脑袋和女孩都会消失。</p>
+      <div class="sheet-actions">
+        <button class="btn btn-ghost" id="revNo">再想想</button>
+        <button class="btn btn-primary" id="revYes">重新养一只</button>
+      </div>`);
+    $('#revNo').onclick = closeSheet;
+    $('#revYes').onclick = () => {
+      const keep = S.peki && typeof S.peki.cheerTotal === 'number' ? S.peki.cheerTotal : 0;
+      const t0 = Date.now();
+      S.peki = { charm: 0, lastFeed: t0, lastTease: 0, ghostUntil: 0, bigUntil: 0, girlUntil: 0, ptUntil: 0, dead: false, cheerTotal: keep, teaseCount: 0, joy: 0, joyUntil: 0, life: { apple: t0 + DAY, cake: t0 + DAY, mushroom: t0 + DAY } };
+      persist(); closeSheet();
+      toast('新佩奇来啦，记得常喂它', '🐣');
+      renderPeki();
+    };
+  }
+
+  function renderPeki() {
+    const got = S.notes.length;
+    const todayN = todayPoints();
+    const st = pkTick();
+    const now = Date.now();
+    if (!S.clock || typeof S.clock !== 'object') S.clock = { target: 0 };
+    const dead = st.dead;
+    const bathing = !dead && st.ghostUntil > now;
+    const big = !dead && st.bigUntil > now;
+    const girlOn = !dead && st.girlUntil > now;
+    const dogOn = !dead && (st.cheerTotal || 0) >= DOG_AT;
+    const ptOn = !dead && !dogOn && st.ptUntil > now;
+    const charm = dead ? 0 : st.charm;
+    /* 小佩奇：魅力 10 / 50 / 200 各出现一个，发色依次黄、白、红 */
+    const MINI_AT = [10, 50, 200];
+    const MINI_HAIR = ['#e8b93e', '#f3effa', '#d95a4e'];
+    const minis = charm >= MINI_AT[2] ? 3 : charm >= MINI_AT[1] ? 2 : charm >= MINI_AT[0] ? 1 : 0;
+    const ps = big ? 2.275 : 1.75;
+    const gs = ps * 1.06;
+    const lifeP = dead ? 0 : lifePct(st);
+    const joyV = dead ? 0 : joyLeft(st) / 60000;
+    const sleepy = !dead && joyV <= 0;
+
+    const bgSvg = ptOn ? QuitArt.pekiBg() : `<svg class="scene-svg" viewBox="0 0 800 588" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
+          <defs><radialGradient id="pkG" cx=".5" cy=".35" r=".7"><stop offset="0" stop-color="#3a3158"/><stop offset="1" stop-color="#241f38"/></radialGradient></defs>
+          <rect width="800" height="588" fill="url(#pkG)"/>
+          ${[[260, 110], [520, 130], [380, 80], [460, 210], [320, 220], [600, 200]].map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="2.2" fill="#ffe9a8" class="spk" style="animation-delay:${i * .5}s"/>`).join('')}
+        </svg>`;
+
+    let actors = '';
+    if (dead) {
+      actors = QuitArt.grave();
+    } else {
+      const tub = bathing ? QuitArt.bath(girlOn ? 412 : 400, girlOn ? (big ? 210 : 198) : (big ? 164 : 150)) : null;
+      const px = girlOn ? 328 : 400;
+      if (tub) actors += tub.back;
+      if (girlOn) {
+        /* 女孩先画：马尾垂在佩奇脸后面，不会挡住佩奇 */
+        actors += `<g transform="translate(508 300)"><g class="peki-float" style="animation-delay:-1.4s">
+          <g class="pk-tap" data-who="girl">${QuitArt.girlHead(gs, sleepy)}</g>
+        </g></g>`;
+      }
+      actors += `<g transform="translate(${px} 300)"><g class="peki-float">
+          <g class="kid-anim peki-kid pk-tap" data-who="peki">${QuitArt.pekiHead(ps, sleepy)}</g>
+        </g></g>`;
+      if (sleepy) {
+        const zf = ps / 1.75;
+        actors += `<g transform="translate(${(px - 88 * zf).toFixed(0)} ${(300 - 92 * zf).toFixed(0)})">
+          <text class="zzz" x="0" y="0" font-family="Helvetica, Arial, sans-serif" font-size="${(20 * zf).toFixed(1)}" font-weight="700" fill="#cfc6f0">Z</text>
+          <text class="zzz" style="animation-delay:1.1s" x="${(20 * zf).toFixed(0)}" y="${(-18 * zf).toFixed(0)}" font-family="Helvetica, Arial, sans-serif" font-size="${(15 * zf).toFixed(1)}" font-weight="700" fill="#cfc6f0">z</text>
+          <text class="zzz" style="animation-delay:2.2s" x="${(36 * zf).toFixed(0)}" y="${(-34 * zf).toFixed(0)}" font-family="Helvetica, Arial, sans-serif" font-size="${(11 * zf).toFixed(1)}" font-weight="700" fill="#cfc6f0">z</text>
+        </g>`;
+        if (girlOn) {
+          const gf = gs / 1.75;
+          actors += `<g transform="translate(${(508 + 40 * gf).toFixed(0)} ${(300 - 88 * gf).toFixed(0)})">
+            <text class="zzz" style="animation-delay:.6s" x="0" y="0" font-family="Helvetica, Arial, sans-serif" font-size="${(17 * gf).toFixed(1)}" font-weight="700" fill="#f0c6d6">Z</text>
+            <text class="zzz" style="animation-delay:1.8s" x="${(18 * gf).toFixed(0)}" y="${(-16 * gf).toFixed(0)}" font-family="Helvetica, Arial, sans-serif" font-size="${(12 * gf).toFixed(1)}" font-weight="700" fill="#f0c6d6">z</text>
+          </g>`;
+        }
+      }
+      if (tub) actors += tub.front;
+      const miniPos = [[150, 198], [670, 166], [126, 392]];
+      for (let i = 0; i < minis; i++) {
+        actors += `<g transform="translate(${miniPos[i][0]} ${miniPos[i][1]})"><g class="peki-float" style="animation-delay:-${(i * 1.1).toFixed(1)}s"><g class="pk-tap mini-tap" data-who="mini" data-i="${i}">${QuitArt.pekiHead(0.82, sleepy, MINI_HAIR[i])}</g></g></g>`;
+      }
+      if (dogOn) actors += `<g class="dog-actor" transform="translate(168 498) scale(1.5)"><g>${QuitArt.dog()}</g></g>`;
+    }
+
+    $('#main').innerHTML = `
+      <div class="stage peki-stage${sleepy ? ' sleepy' : ''}">
+        ${bgSvg.replace('</svg>', actors + '</svg>')}
+        <div class="goal-banner" id="clockBanner">${clockText()}</div>
+        <div class="charm-chip">✨ ${charm}</div>
+        <div class="stat-bars">
+          <div class="sbar">
+            <div class="sbar-top"><span>❤️ 生命</span><b id="lifeTxt">${lifeP}%</b></div>
+            <div class="sbar-track"><i id="lifeFill" class="life" style="width:${lifeP}%"></i></div>
+          </div>
+          <div class="sbar">
+            <div class="sbar-top"><span>😄 快乐</span><b id="joyTxt">${joyV.toFixed(1)}/10 分</b></div>
+            <div class="sbar-track"><i id="joyFill" class="joy" style="width:${(joyV * 10).toFixed(1)}%"></i></div>
+          </div>
+        </div>
+      </div>
+      ${dead
+        ? `<div class="dock single"><button class="act primary" id="revivePk">🪦 重新养一只佩奇</button></div>`
+        : `<div class="dock">
+            <button class="act" id="feedBtn">🍽️ 喂食</button>
+            <button class="act" id="teaseBtn">💃 逗一逗</button>
+            <button class="act" id="playBtn">${sleepy ? '🎈 叫醒佩奇' : '🎈 玩耍'}</button>
+            <button class="act primary" id="cheerPeki">💖 鼓励佩奇${ptOn ? '<small class="cheer-num">已解锁 🇵🇹 主场</small>' : ''}</button>
+          </div>`}
+      <div class="card">
+        <h3>🤫 跟佩奇说悄悄话</h3>
+        <div class="form">
+          <input id="msgInput" maxlength="60" placeholder="只说给佩奇一个人听…">
+          <button class="btn btn-primary" id="msgSend">悄悄告诉佩奇</button>
+        </div>
+        <div id="msgList">${S.msgs.length ? '' : '<p class="muted tiny" style="text-align:center">还没有悄悄话</p>'}</div>
+      </div>
+      <div class="card">
+        <h3>⭐ 我的积分 · 抽盲盒</h3>
+        ${statsRow([['当前积分', `<span id="curPts">${S.points}</span>`], ['今日已得', `<span id="todayPts">${todayN}/5</span>`]])}
+        <button class="btn btn-primary btn-lg" id="drawBox" ${S.points < 20 ? 'disabled' : ''} style="margin-top:14px">抽一个盲盒（⭐20）</button>
+        <div class="note-wrap">
+          <p class="note-title">🎁 已抽到的盲盒 ${got} 个${got ? '（点一下看全文）' : ''}</p>
+          ${got ? `<div class="note-list">${S.notes.map((i, j) => `<button class="note-item" data-note="${i}" data-idx="${j + 1}"><span class="note-idx">${j + 1}</span><span class="note-txt">${esc(NOTES[i])}</span></button>`).join('')}</div>` : '<p class="muted tiny">还没有抽过盲盒，攒够 20 分来抽一个吧。</p>'}
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-lg rules-btn" id="pekiRules">📖 佩奇规则说明</button>
+    `;
+    if (dead) {
+      $('#revivePk').onclick = revivePeki;
+    } else {
+      $('#feedBtn').onclick = openFeed;
+      $('#teaseBtn').onclick = teasePeki;
+      $('#playBtn').onclick = playPeki;
+      $('#cheerPeki').onclick = () => {
+        heartsBurst($('.peki-stage'));
+        anim($('.peki-stage .kid-anim'), 'jump');
+        const prev = S.pekiCheer || 0;
+        S.pekiCheer = prev + 1;
+        st.cheerTotal = (st.cheerTotal || 0) + 1;
+        const wasPt = st.ptUntil > Date.now();
+        if (st.cheerTotal === DOG_AT) {
+          st.ptUntil = 0; S.pekiCheer = 0;
+          persist();
+          setTimeout(() => { toast('🐶 汪！汪！', '🐶'); if (tab === 'peki') renderPeki(); }, 1300);
+          return;
+        }
+        if (st.cheerTotal > DOG_AT) { /* 小狗已经在啦 */ }
+        else if (S.pekiCheer >= 10) { st.ptUntil = Date.now() + PK_DUR; S.pekiCheer = 0; }
+        persist();
+        toast(pick(['谢谢你呀，我今天超有干劲！', '收到爱心，满分回血！', '嘿嘿，被鼓励到了～', '有你在，我什么都不怕']), '💖');
+        if (!wasPt && st.ptUntil > Date.now()) setTimeout(() => { if (tab === 'peki') renderPeki(); }, 1400);
+      };
+      updatePekiBtns();
+    }
+    const dg = $('.dog-actor');
+    if (dg) {
+      dg.style.cursor = 'pointer';
+      dg.addEventListener('click', () => {
+        toast(pick(['汪汪！', '汪！', '汪汪汪！']), '🐶');
+        const inner = dg.querySelector('g');
+        if (inner) { inner.classList.remove('dog-wiggle'); inner.getBBox(); inner.classList.add('dog-wiggle'); setTimeout(() => inner.classList.remove('dog-wiggle'), 600); }
+      });
+    }
+    $('#clockBanner').onclick = openClock;
+    $('#pekiRules').onclick = pekiRules;
+    /* 点头像回应：佩奇 / 女孩 / 小佩奇都能点，睡着时安安静静不回应 */
+    $$('.peki-stage .pk-tap').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (sleepy) return;
+        const who = el.dataset.who;
+        const [txt, ico] = pick(TAP_LINES[who] || TAP_LINES.peki);
+        toast(txt, ico);
+        if (who === 'peki') anim($('.peki-kid'), 'nod');
+        if (who === 'mini') { el.classList.remove('mini-bop'); void el.getBBox().width; el.classList.add('mini-bop'); }
+      });
+    });
+    /* 已抽到的盲盒：点一下看全文 */
+    $$('.note-item').forEach((b) => {
+      b.onclick = () => {
+        const i = +b.dataset.note, idx = +b.dataset.idx;
+        sheet(`<h3>🎁 第 ${idx} 个盲盒</h3>
+          <div class="note-big" style="margin-top:10px">${esc(NOTES[i])}</div>
+          <button class="btn btn-primary btn-lg" style="margin-top:14px" onclick="document.querySelector('.sheet-mask').remove()">收好啦</button>`);
+      };
+    });
+    clearInterval(pkClockTimer);
+    let pkSec = 0;
+    pkClockTimer = setInterval(() => {
+      const el = $('#clockBanner');
+      if (!el) return clearInterval(pkClockTimer);
+      pkSec++;
+      if (pkSec % 15 === 0) el.textContent = clockText();
+      if (tab !== 'peki') return;
+      const nowSt = pkTick();
+      if (nowSt.dead) return renderPeki();
+      if (pkSec % 15 === 0) {
+        const lp = lifePct(nowSt);
+        const lf = $('#lifeFill'), lt = $('#lifeTxt');
+        if (lf) lf.style.width = lp + '%';
+        if (lt) lt.textContent = lp + '%';
+      }
+      /* 快乐值每秒都在减少：实时刷新数字和进度条 */
+      const jl = joyLeft(nowSt), jv = jl / 60000;
+      const jf = $('#joyFill'), jt = $('#joyTxt');
+      if (jf) jf.style.width = (jv * 10).toFixed(1) + '%';
+      if (jt) jt.textContent = jv.toFixed(1) + '/10 分';
+      const stageEl = $('.peki-stage');
+      if (stageEl && (jl <= 0) !== stageEl.classList.contains('sleepy')) {
+        renderPeki();
+        if (jl <= 0) toast('佩奇等你等到睡着了…', '😴');
+      }
+    }, 1000);
+    $('#drawBox').onclick = () => {
+      if (S.points < 20) return toast('积分不够，先去打卡攒 20 分', '⭐');
+      /* 一共十个盲盒，可以一直抽，可能抽到重复的 */
+      const got2 = Math.floor(Math.random() * NOTES.length);
+      S.points -= 20;
+      S.notes.push(got2);
+      persist();
+      sheet(`<h3>🎁 盲盒打开啦</h3>
+        <div class="note-big">${NOTES[got2]}</div>
+        <p class="muted tiny" style="text-align:center">已抽 ${S.notes.length} 个 · 剩余积分 ⭐${S.points}</p>
+        <button class="btn btn-primary btn-lg" onclick="document.querySelector('.sheet-mask').remove()">收好啦</button>`);
+      render();
+    };
+    $('#msgSend').onclick = () => {
+      const v = $('#msgInput').value.trim();
+      if (!v) return toast('想说点什么呀', '🤫');
+      S.msgs.unshift({ txt: v, ts: Date.now() });
+      persist();
+      toast('佩奇记在心里了', '🐷');
+      renderPeki();
+    };
+    const d = new Date(), hr = d.getHours();
+    const greet = hr < 6 ? '这么晚还不睡？' : hr < 11 ? '早上好，今天也要加油！' : hr < 14 ? '中午好，饭后走一走～' : hr < 19 ? '下午好，来抽盲盒吗？' : '晚上好，今天打卡了吗？';
+    const list = $('#msgList');
+    if (S.msgs.length) {
+      list.innerHTML = S.msgs.map((m, i) => `<div class="msg-item"><div><p>${esc(m.txt)}</p>
+        <small class="muted tiny">${new Date(m.ts).getMonth() + 1}月${new Date(m.ts).getDate()}日 · 佩奇：${greet}</small></div>
+        <button class="msg-del" data-i="${i}">删</button></div>`).join('');
+      $$('#msgList .msg-del').forEach((b) => b.addEventListener('click', () => {
+        S.msgs.splice(parseInt(b.dataset.i, 10), 1);
+        persist(); renderPeki();
+      }));
+    }
+  }
+
+  /* ---------------- 分享 ---------------- */
+  const gameUrl = () => location.href.split('#')[0];
+  function copyText(t) {
+    return new Promise((resolve) => {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(t).then(() => resolve(true)).catch(() => resolve(fallbackCopy(t)));
+      } else resolve(fallbackCopy(t));
+    });
+  }
+  function fallbackCopy(t) {
+    const ta = document.createElement('textarea');
+    ta.value = t; ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+    document.body.appendChild(ta);
+    ta.select(); ta.setSelectionRange(0, t.length);
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    ta.remove();
+    return ok;
+  }
+  function serviceSheet() {
+    const wxid = 'z849998116';
+    sheet(`<h3>💬 联系客服</h3>
+      <p class="sheet-sub">遇到问题、想提建议，加微信随时找我</p>
+      <div class="wx-card">
+        <span class="wx-card-ico">💬</span>
+        <div><small>客服微信号</small><b>${wxid}</b></div>
+      </div>
+      <div class="sheet-actions col">
+        <button class="btn btn-primary btn-lg" id="svCopy">📋 复制微信号</button>
+        <button class="btn btn-ghost btn-lg" id="svOk">知道啦</button>
+      </div>`);
+    $('#svCopy').onclick = async () => {
+      const ok = await copyText(wxid);
+      toast(ok ? '微信号已复制，去微信搜索添加吧' : '复制失败，请手动记下 ' + wxid, ok ? '📋' : '⚠️');
+    };
+    $('#svOk').onclick = closeSheet;
+  }
+
+  async function copyLink() {
+    const ok = await copyText(gameUrl());
+    closeSheet();
+    toast(ok ? '链接已复制，粘贴给好友就能打开' : '复制失败，长按地址栏手动复制', ok ? '🔗' : '⚠️');
+  }
+
+  /* ---------------- 动画 ---------------- */
+  function heartsBurst(host) {
+    if (!host) return;
+    const icons = ['💖', '💗', '💕', '❤️', '💞', '💓', '💝'];
+    for (let i = 0; i < 8; i++) {
+      const s = document.createElement('span');
+      s.className = 'heart-pop';
+      s.textContent = icons[i % icons.length];
+      s.style.left = (50 + (Math.random() * 34 - 17)).toFixed(1) + '%';
+      s.style.fontSize = (14 + Math.random() * 12).toFixed(0) + 'px';
+      s.style.setProperty('--dx', (Math.random() * 110 - 55).toFixed(0) + 'px');
+      s.style.animationDelay = (i * 75) + 'ms';
+      host.appendChild(s);
+      setTimeout(() => s.remove(), 2100);
+    }
+  }
+  function anim(el, cls) {
+    if (!el) return;
+    /* 躺在床上睡觉的小朋友：不做跳/扑等位移动作，只轻轻晃一晃回应 */
+    if (el.classList.contains('bed-kid')) cls = 'shake';
+    el.classList.remove('jump', 'shake', 'nod', 'eat');
+    void el.offsetWidth;
+    el.classList.add(cls);
+    setTimeout(() => el.classList.remove(cls), 900);
+  }
+
+  /* ---------------- 主渲染 ---------------- */
+  function render() {
+    $('#ptsBadge').textContent = '⭐ ' + S.points;
+    const nb = $('#nickBtn');
+    if (nb) { nb.textContent = S.nickname || '未命名'; nb.title = '点击修改昵称'; }
+    if (tab === 'smoke') renderSmoke();
+    else if (tab === 'alcohol') renderAlcohol();
+    else if (tab === 'fit') renderFit();
+    else renderPeki();
+    $$('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  }
+
+  function openNickEdit() {
+    if (!S) return;
+    sheet(`<h3>✏️ 修改昵称</h3>
+      <p class="sheet-sub">昵称会显示在顶栏标题旁边，随时可以再改</p>
+      <div class="form"><label>昵称</label>
+        <input id="nickInput" maxlength="12" value="${esc(S.nickname || '')}" placeholder="给自己起个名字"></div>
+      <button class="btn btn-primary btn-lg" id="nickSave" style="margin-top:14px">保存昵称</button>`);
+    const inp = $('#nickInput');
+    setTimeout(() => { inp.focus(); inp.select(); }, 60);
+    $('#nickSave').onclick = () => {
+      const v = inp.value.trim();
+      if (!v) return toast('昵称不能为空', '✏️');
+      S.nickname = v;
+      persist();
+      closeSheet();
+      $('#nickBtn').textContent = v;
+      toast('昵称已更新', '✏️');
+    };
+  }
+
+  function boot() {
+    loadDB();
+    $('#pekiIco').innerHTML = QuitArt.pekiAvatar();
+    $('#wxLogin').addEventListener('click', openWxAuth);
+    $$('.tab').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.tab; render(); window.scrollTo(0, 0); }));
+    $('#nickBtn').addEventListener('click', openNickEdit);
+    $('#menuBtn').addEventListener('click', () => {
+      sheet(`<h3>${esc(S.nickname || '我')} 的菜单</h3>
+        <p class="sheet-sub">复制链接给朋友，或管理当前账号</p>
+        <div class="menu-list">
+          <button class="menu-row" id="mService"><span>💬</span><div><b>联系客服</b><small>加微信，问题随时找我</small></div></button>
+          <button class="menu-row" id="mCopy"><span>🔗</span><div><b>复制链接</b><small>粘贴到聊天框就能打开</small></div></button>
+          <button class="menu-row danger" id="mLogout"><span>🚪</span><div><b>退出登录</b><small>记录会保留，可重新登录</small></div></button>
+        </div>`);
+      $('#mService').onclick = serviceSheet;
+      $('#mCopy').onclick = copyLink;
+      $('#mLogout').onclick = logout;
+    });
+    $('#musicBtn').addEventListener('click', () => {
+      if (!window.QuitMusic) return;
+      const on = !QuitMusic.enabled();
+      QuitMusic.setEnabled(on);
+      if (on) QuitMusic.play(); else QuitMusic.stop();
+      toast(on ? '音乐已开启' : '音乐已关闭', '🎵');
+    });
+    // 数据持续刷新（每分钟）
+    setInterval(() => {
+      if (!S) return;
+      if (tab === 'peki') { updatePekiBtns(); return; }
+      const ae = document.activeElement;
+      if (ae && ae.tagName === 'INPUT') return;
+      if ($('.sheet-mask')) return;
+      const y = window.scrollY;
+      render();
+      window.scrollTo(0, y);
+    }, 10000);
+    // 佩奇按钮冷却倒计时
+    setInterval(() => { if (S && tab === 'peki' && !$('.sheet-mask')) updatePekiBtns(); }, 1000);
+
+    const cur = DB.current && DB.accounts[DB.current];
+    if (cur) { S = fixSave(cur); enterApp(); } else showLogin();
+  }
+
+  document.addEventListener('DOMContentLoaded', boot);
+})();

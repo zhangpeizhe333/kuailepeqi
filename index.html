@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>快乐佩奇：戒烟戒酒跟我走</title>
+<meta name="theme-color" content="#171227">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<script>
+/* 每次打开都带新版本号请求资源，避免手机/微信缓存旧代码 */
+(function () {
+  var v = 'v' + Date.now();
+  document.write('<link rel="stylesheet" href="style.css?' + v + '">');
+  ['art.js', 'music.js', 'game.js'].forEach(function (f) {
+    document.write('<script src="' + f + '?' + v + '"><\/script>');
+  });
+})();
+</script>
+</head>
+<body>
+
+<!-- ============ 登录页 ============ -->
+<div id="login" class="login">
+  <div class="login-scene" aria-hidden="true">
+    <div class="scene-stars"></div>
+    <div class="scene-hills"></div>
+    <div class="scene-house">🏠</div>
+  </div>
+  <div class="login-card">
+    <div class="logo">
+      <span class="logo-emoji">
+        <svg viewBox="0 0 100 100" width="68" height="68" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="41" fill="none" stroke="#e35d6a" stroke-width="11"/>
+          <line x1="22" y1="22" x2="78" y2="78" stroke="#e35d6a" stroke-width="11" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <h1>快乐佩奇</h1>
+      <p class="sub-title">戒烟戒酒跟我走</p>
+      <p class="credit">游戏制作：张佩喆</p>
+    </div>
+    <p class="login-sub">断崖式戒烟 · 清醒戒酒 · 运动打卡<br>让小朋友陪你一起变健康</p>
+    <button id="wxLogin" class="wx-btn">
+      <span class="wx-ico">💬</span> 微信一键登录
+    </button>
+    <p class="muted tiny" style="text-align:center;margin-top:14px">一个微信一个专属存档 · 数据保存在本机</p>
+  </div>
+</div>
+
+<!-- ============ 主界面 ============ -->
+<div id="app" class="hidden">
+  <header class="topbar">
+    <div class="topbar-brand">
+      <span class="brand-ico">
+        <svg viewBox="0 0 100 100" width="22" height="22" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="41" fill="none" stroke="#e35d6a" stroke-width="12"/>
+          <line x1="23" y1="23" x2="77" y2="77" stroke="#e35d6a" stroke-width="12" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span class="tb-wrap">快乐佩奇<small class="brand-credit">戒烟戒酒跟我走</small></span>
+      <button id="nickBtn" class="nick-chip" title="点击修改昵称">玩家</button>
+    </div>
+    <div class="topbar-acts">
+      <span id="ptsBadge" class="pts-badge">⭐ 0</span>
+      <button id="musicBtn" class="icon-btn" title="音乐：卡农（可关闭）">🎵</button>
+      <button id="menuBtn" class="icon-btn" title="菜单">☰</button>
+    </div>
+  </header>
+
+  <main id="main"></main>
+
+  <nav class="tabbar">
+    <button class="tab active" data-tab="peki"><span class="tab-ico" id="pekiIco"></span>首页</button>
+    <button class="tab" data-tab="smoke"><span>🚬</span>戒烟</button>
+    <button class="tab" data-tab="alcohol"><span>🍺</span>戒酒</button>
+    <button class="tab" data-tab="fit"><span>🏃</span>运动</button>
+  </nav>
+</div>
+
+<audio id="bgm" src="bgm.mp3" loop preload="auto"></audio>
+<div id="sheetRoot"></div>
+<div id="toastWrap"></div>
+
+
+</body>
+</html>
