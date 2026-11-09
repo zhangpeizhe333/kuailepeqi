@@ -36,7 +36,7 @@
       wx: null, nickname: '', gender: 'boy', age: '', signature: '无语中..', avatar: '🐣',
       smoke: null, alcohol: null, fit: null,
       points: 0, pointsToday: { d: '', n: 0 }, teaseToday: { d: '', n: 0 }, notes: [], msgs: [], pekiCheer: 0,
-      vip: { until: 0 }, vipFree: { d: '', used: false },
+      vip: { until: 0 }, vipFree: { d: '', used: false }, cloud: null,
       peki: { charm: 0, lastFeed: 0, lastTease: 0, ghostUntil: 0, bigUntil: 0, girlUntil: 0, ptUntil: 0, dead: false },
       clock: { target: 0 },
       createdAt: Date.now()
@@ -232,6 +232,8 @@
     $('#app').classList.remove('hidden');
     render();
     if (window.QuitMusic && QuitMusic.enabled()) QuitMusic.play();
+    /* 静默把昵称和天数同步到云端，好友才搜得到 */
+    setTimeout(() => { if (S && S.nickname) sbSync().catch(() => {}); }, 2500);
   }
 
   /* ---------------- 打卡 ---------------- */
@@ -1424,6 +1426,124 @@
     $('#bkCancel').onclick = closeSheet;
   }
 
+  /* ---------------- 好友（Supabase 云端） ---------------- */
+  const SB_URL = 'https://urvoelbmqdlkbdicthlc.supabase.co';
+  const SB_KEY = 'sb_publishable_4FL01kCrZydQ3Zl0UbaLgg_vKJdvI3P';
+
+  function cloudId() {
+    if (!S.cloud || typeof S.cloud !== 'object' || !S.cloud.uid) {
+      const r = () => Math.random().toString(36).slice(2, 10);
+      S.cloud = { uid: 'u' + Date.now().toString(36) + r(), token: r() + r() + r() };
+      persist();
+    }
+    return S.cloud;
+  }
+  async function sbRpc(fn, args) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 12000);
+    try {
+      const res = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`, {
+        method: 'POST',
+        headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify(args || {}),
+        signal: ctl.signal,
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const txt = await res.text();
+      return txt ? JSON.parse(txt) : null;
+    } finally { clearTimeout(timer); }
+  }
+  function myDays() {
+    const dd = (m) => (m && m.cfg && m.cfg.started) ? Math.max(0, Math.floor((Date.now() - m.cfg.started) / DAY)) : 0;
+    return { smoke: dd(S.smoke), alcohol: dd(S.alcohol), fit: dd(S.fit) };
+  }
+  async function sbSync() {
+    const c = cloudId(), d = myDays();
+    return sbRpc('pk_upsert', {
+      p_uid: c.uid, p_token: c.token, p_nick: String(S.nickname || '匿名玩家').slice(0, 20),
+      p_avatar: S.avatar || '🐣', p_smoke: d.smoke, p_alcohol: d.alcohol, p_fit: d.fit,
+    });
+  }
+
+  function frRow(p, act) {
+    const t = [];
+    if (p.smoke_days) t.push('🚬 ' + p.smoke_days + ' 天');
+    if (p.alcohol_days) t.push('🍺 ' + p.alcohol_days + ' 天');
+    if (p.fit_days) t.push('🏃 ' + p.fit_days + ' 天');
+    return `<div class="fr-row">
+      <span class="fr-ava">${esc(p.avatar || '🐣')}</span>
+      <div class="fr-info"><b>${esc(p.nickname)}</b><small>${t.length ? t.join(' · ') : '还没开始打卡'}</small></div>
+      ${act}</div>`;
+  }
+
+  async function friendsSheet() {
+    const c = cloudId(), d = myDays();
+    sheet(`<h3>👥 游戏好友</h3>
+      <p class="sheet-sub">搜昵称加好友，看对方坚持了多少天</p>
+      <div class="fr-me">
+        <span class="fr-ava">${esc(S.avatar || '🐣')}</span>
+        <div class="fr-info"><b>${esc(S.nickname || '匿名玩家')}</b><small>🚬 ${d.smoke} 天 · 🍺 ${d.alcohol} 天 · 🏃 ${d.fit} 天</small></div>
+      </div>
+      <div class="fr-search">
+        <input id="frQ" placeholder="输入好友昵称" autocomplete="off">
+        <button id="frGo">搜索</button>
+      </div>
+      <div id="frResult"></div>
+      <p class="fr-tip">好友列表</p>
+      <div id="frList"><p class="muted tiny">正在连接云端…</p></div>`);
+
+    const listEl = $('#frList'), resEl = $('#frResult');
+    const drawList = (arr) => {
+      if (!arr || !arr.length) { listEl.innerHTML = '<p class="muted tiny">还没有好友，上面搜昵称加一个吧</p>'; return; }
+      listEl.innerHTML = arr.map((p) => frRow(p, `<button class="fr-btn ghost" data-del="${esc(p.uid)}">移除</button>`)).join('');
+      listEl.querySelectorAll('[data-del]').forEach((b) => {
+        b.onclick = async () => {
+          try {
+            await sbRpc('pk_del_friend', { p_uid: c.uid, p_token: c.token, p_friend: b.dataset.del });
+            toast('已移除', '👋'); load();
+          } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+        };
+      });
+    };
+    const load = async () => {
+      try {
+        await sbSync();
+        const arr = await sbRpc('pk_my_friends', { p_uid: c.uid, p_token: c.token });
+        drawList(arr);
+      } catch (err) {
+        listEl.innerHTML = '<p class="muted tiny">连不上云端，检查一下网络再试</p>';
+      }
+    };
+    const doSearch = async () => {
+      const q = $('#frQ').value.trim();
+      if (!q) return toast('先输个昵称', '⌨️');
+      resEl.innerHTML = '<p class="muted tiny">搜索中…</p>';
+      try {
+        const arr = await sbRpc('pk_search', { p_q: q });
+        if (!arr || !arr.length) {
+          resEl.innerHTML = '<p class="muted tiny">没找到这个人，让对方先打开一次游戏吧</p>';
+          return;
+        }
+        resEl.innerHTML = arr.map((p) => frRow(p, `<button class="fr-btn" data-add="${esc(p.uid)}">＋ 添加</button>`)).join('');
+        resEl.querySelectorAll('[data-add]').forEach((b) => {
+          b.onclick = async () => {
+            try {
+              const r = await sbRpc('pk_add_friend', { p_uid: c.uid, p_token: c.token, p_friend: b.dataset.add });
+              if (r && r.ok) { toast('加好啦', '🤝'); b.textContent = '已添加'; b.disabled = true; load(); }
+              else if (r && r.err === 'self') toast('这是你自己呀', '🙃');
+              else toast('没加上，再试一次', '⚠️');
+            } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+          };
+        });
+      } catch (err) {
+        resEl.innerHTML = '<p class="muted tiny">连不上云端，检查一下网络再试</p>';
+      }
+    };
+    $('#frGo').onclick = doSearch;
+    $('#frQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+    load();
+  }
+
   function serviceSheet() {
     const wxid = 'z849998116';
     sheet(`<h3>💬 联系客服</h3>
@@ -1522,6 +1642,7 @@
           ${installed ? '' : `<button class="menu-row" id="mInstall"><span>📲</span><div><b>安装到手机桌面</b><small>像 App 一样点图标就打开</small></div></button>`}
           ${isAndroid ? `<button class="menu-row" id="mApk"><span>📥</span><div><b>下载安卓 App</b><small>安装包下载到手机，装好就是原生应用</small></div></button>` : ''}
           <button class="menu-row" id="mVip"><span>🎫</span><div><b>会员中心</b><small>${vipOn() ? '已开通 · 还剩 ' + vipLeftDays() + ' 天' : '输入激活码开通'}</small></div></button>
+          <button class="menu-row" id="mFriends"><span>👥</span><div><b>游戏好友</b><small>搜昵称加好友，看对方坚持了多久</small></div></button>
           <button class="menu-row" id="mService"><span>💬</span><div><b>联系客服</b><small>加微信，问题随时找我</small></div></button>
           <button class="menu-row" id="mCopy"><span>🔗</span><div><b>复制链接</b><small>粘贴到聊天框就能打开</small></div></button>
           <button class="menu-row danger" id="mLogout"><span>🚪</span><div><b>退出登录</b><small>记录会保留，可重新登录</small></div></button>
@@ -1531,6 +1652,7 @@
       const ma = $('#mApk');
       if (ma) ma.onclick = downloadApk;
       $('#mVip').onclick = vipSheet;
+      $('#mFriends').onclick = friendsSheet;
       $('#mService').onclick = serviceSheet;
       $('#mCopy').onclick = copyLink;
       $('#mLogout').onclick = logout;
