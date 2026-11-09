@@ -670,7 +670,10 @@
     return food + base;
   }
   function lifePct(st) {
-    return Math.min(100, Math.floor(lifeLeft(st) / (DAY * 3) * 100));
+    const left = lifeLeft(st);
+    if (left <= 0) return 0;
+    /* 只要还活着就至少显示 1%（初始 1% 会随 43.2 分钟倒计时，但显示不为 0） */
+    return Math.max(1, Math.min(100, Math.floor(left / (DAY * 3) * 100)));
   }
   function effectPct(st, k) {
     const until = k === 'apple' ? st.ghostUntil : k === 'cake' ? st.bigUntil : st.girlUntil;
