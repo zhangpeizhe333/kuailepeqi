@@ -36,6 +36,7 @@
       wx: null, nickname: '', gender: 'boy', age: '', signature: '无语中..', avatar: '🐣',
       smoke: null, alcohol: null, fit: null,
       points: 0, pointsToday: { d: '', n: 0 }, teaseToday: { d: '', n: 0 }, notes: [], msgs: [], pekiCheer: 0,
+      vip: { until: 0 }, vipFree: { d: '', used: false },
       peki: { charm: 0, lastFeed: 0, lastTease: 0, ghostUntil: 0, bigUntil: 0, girlUntil: 0, ptUntil: 0, dead: false },
       clock: { target: 0 },
       createdAt: Date.now()
@@ -106,8 +107,8 @@
   }
 
   /* ---------------- 健康恢复 ---------------- */
-  const SMOKE_HEALTH = [['味觉与皮肤', 60], ['生理烟瘾', 90], ['嗅觉', 150], ['心理烟瘾', 300], ['免疫力', 1000], ['血液', 3000]];
-  const ALCOHOL_HEALTH = [['器官代谢', 60], ['生理酒瘾', 90], ['生育力', 150], ['心理酒瘾', 300], ['大脑神经', 1000], ['疾病风险', 3000]];
+  const SMOKE_HEALTH = [['味觉与气色', 60], ['抽烟习惯', 90], ['嗅觉', 150], ['想烟的念头', 300], ['抵抗力', 1000], ['循环与气色', 3000]];
+  const ALCOHOL_HEALTH = [['身体代谢', 60], ['饮酒习惯', 90], ['精力状态', 150], ['想酒的念头', 300], ['睡眠与专注', 1000], ['长期状态', 3000]];
   function elapsedDays(started) { return started ? (Date.now() - started) / 86400000 : 0; }
   function pctText(p) {
     if (p <= 0) return '0%';
@@ -301,7 +302,8 @@
       return `<div class="hp-row"><span class="hp-name">${name}</span>
         <div class="hp-bar"><i style="width:${p}%"></i></div><b class="hp-pct ${p >= 100 ? 'gold' : ''}">${pctText(p)}</b></div>`;
     }).join('');
-    return `<div class="card"><h3>🌿 健康总览</h3>${rows}</div>`;
+    return `<div class="card"><h3>🌿 身体变化参考</h3>${rows}
+      <p class="muted tiny" style="margin:10px 0 0;line-height:1.65;text-align:left">上面的进度是常见科普里提到的大致时间，用来给自己打气的参考，不是体检结果，也不能代替医生的建议。</p></div>`;
   }
   function statsRow(items) {
     return `<div class="stats-grid">${items.map(([k, v]) => `<div class="stat"><small>${k}</small><b>${v}</b></div>`).join('')}</div>`;
@@ -367,7 +369,7 @@
       <div class="dock">
         <button class="act" data-act="hug">🤗 抱一抱</button>
         <button class="act" data-act="punch">👊 打一拳</button>
-        <button class="act" data-act="chest">🩻 胸部检查</button>
+        <button class="act" data-act="chest">🩻 肺部小窗</button>
         <button class="act primary" data-act="checkin" ${today ? 'disabled' : ''}>${today ? '✅ 今日已打卡' : '戒烟打卡'}</button>
       </div>
       ${titleBar('smoke', SMOKE_TITLES)}
@@ -436,7 +438,8 @@
 
   function openChest() {
     const gone = Math.min(100, S.smoke.total || 0);
-    sheet(`<h3>🩻 胸部检查</h3><div class="organ-box">${QuitArt.lungs(gone)}</div>`);
+    sheet(`<h3>🩻 肺部小窗</h3><div class="organ-box">${QuitArt.lungs(gone)}</div>
+      <p class="muted tiny" style="text-align:center;margin-top:10px">趣味示意，不是医学影像，也不能用来判断身体情况。</p>`);
   }
 
   /* ---------------- 戒酒 ---------------- */
@@ -456,7 +459,7 @@
       <div class="dock">
         <button class="act" data-act="kick">🦵 踹一脚</button>
         <button class="act" data-act="pat">🖐️ 拍拍肩</button>
-        <button class="act" data-act="liver">🫀 肝脏检查</button>
+        <button class="act" data-act="liver">🫀 肝脏小窗</button>
         <button class="act primary" data-act="checkin" ${today ? 'disabled' : ''}>${today ? '✅ 今日已打卡' : '戒酒打卡'}</button>
       </div>
       ${titleBar('alcohol', ALCOHOL_TITLES)}
@@ -539,12 +542,14 @@
 
   function openLiver() {
     const gone = Math.min(100, S.alcohol.total || 0);
-    sheet(`<h3>🫀 肝脏检查</h3><div class="organ-box">${QuitArt.liver(gone)}</div>`);
+    sheet(`<h3>🫀 肝脏小窗</h3><div class="organ-box">${QuitArt.liver(gone)}</div>
+      <p class="muted tiny" style="text-align:center;margin-top:10px">趣味示意，不是医学影像，也不能用来判断身体情况。</p>`);
   }
 
   function openBelly() {
     const gone = Math.min(100, S.fit.total || 0);
-    sheet(`<h3>🫃 体脂检查</h3><div class="organ-box">${QuitArt.belly(gone)}</div>`);
+    sheet(`<h3>🫃 体脂小窗</h3><div class="organ-box">${QuitArt.belly(gone)}</div>
+      <p class="muted tiny" style="text-align:center;margin-top:10px">趣味示意，不是医学测量，也不能用来判断身体情况。</p>`);
   }
 
   /* ---------------- 减肥健身 ---------------- */
@@ -560,7 +565,7 @@
       <div class="dock">
         <button class="act" data-act="pat">🤚 摸摸头</button>
         <button class="act" data-act="feed">🍗 疯狂喂食</button>
-        <button class="act" data-act="belly">🫃 体脂检查</button>
+        <button class="act" data-act="belly">🫃 体脂小窗</button>
         <button class="act primary" data-act="checkin" ${today ? 'disabled' : ''}>${today ? '✅ 今日已打卡' : '运动打卡'}</button>
       </div>
       ${titleBar('fit', FIT_TITLES)}
@@ -618,18 +623,18 @@
   }
 
   /* ---------------- 佩奇 ---------------- */
-  /* 十张小纸条：都是陪着你、给你打气的话 */
+  /* 十张小纸条：古诗词与句子 */
   const NOTES = [
-    '今天也来了，我就知道你还在坚持。',
-    '慢一点没关系，别停下来就好。',
-    '你少抽的那一支烟，我都记着呢。',
-    '撑不住的时候，来摸摸我的头。',
-    '不用做到满分，做到今天就行。',
-    '没忍住的那天别骂自己，明天还能再来。',
-    '你在努力，我就在旁边看着。',
-    '每个想放弃的夜里，都有人在等你回来。',
-    '累了就歇会儿，但别投降。',
-    '一天一天攒下来，就是了不起。',
+    '顺其自然，随遇而安。（《庄子》）',
+    '本来无一物，何处惹尘埃。（惠能）',
+    '人生如逆旅，我亦是行人。（苏轼）',
+    '乱花渐欲迷人眼，浅草才能没马蹄。（白居易）',
+    '知足者常乐，终身不辱。（老子）',
+    '盛年不重来，一日难再晨。（陶渊明）',
+    '浆声灯影里的日子，过一天，少一天。（朱自清）',
+    '水满则溢，月盈则亏。（《淮南子》）',
+    '天下事有难易乎？为之，则难者亦易矣。（彭端淑）',
+    '临渊羡鱼，不如退而结网。（《汉书》）',
   ];
   /* 点头像时的回应（睡着时不回应） */
   const TAP_LINES = {
@@ -1034,9 +1039,9 @@
         <div id="msgList">${S.msgs.length ? '' : '<p class="muted tiny" style="text-align:center">还没有悄悄话</p>'}</div>
       </div>
       <div class="card">
-        <h3>⭐ 我的积分 · 抽小纸条</h3>
+        <h3>⭐ 我的积分 · 抽小纸条${vipOn() ? '<span class="vip-tag">VIP</span>' : ''}</h3>
         ${statsRow([['当前积分', `<span id="curPts">${S.points}</span>`], ['今日已得', `<span id="todayPts">${todayN}/5</span>`]])}
-        <button class="btn btn-primary btn-lg" id="drawBox" ${S.points < 20 ? 'disabled' : ''} style="margin-top:14px">抽一张小纸条（⭐20）</button>
+        <button class="btn btn-primary btn-lg" id="drawBox" ${(!vipFreeLeft() && S.points < 20) ? 'disabled' : ''} style="margin-top:14px">${vipFreeLeft() ? '🎫 会员免费抽一张' : '抽一张小纸条（⭐20）'}</button>
         <div class="note-wrap">
           <p class="note-title">📝 已抽到的小纸条 ${got} 张${got ? '（点一下看全文）' : ''}</p>
           ${got ? `<div class="note-list">${S.notes.map((i, j) => `<button class="note-item" data-note="${i}" data-idx="${j + 1}"><span class="note-idx">${j + 1}</span><span class="note-txt">${esc(NOTES[i])}</span></button>`).join('')}</div>` : '<p class="muted tiny">还没有抽过小纸条，攒够 20 积分来抽一张吧。</p>'}
@@ -1131,15 +1136,17 @@
       }
     }, 1000);
     $('#drawBox').onclick = () => {
-      if (S.points < 20) return toast('积分不够，先去打卡攒 20 分', '⭐');
+      const free = vipFreeLeft();
+      if (!free && S.points < 20) return toast('积分不够，先去打卡攒 20 分', '⭐');
       /* 一共十张小纸条，可以一直抽，可能抽到重复的 */
       const got2 = Math.floor(Math.random() * NOTES.length);
-      S.points -= 20;
+      if (free) S.vipFree = { d: todayStr(), used: true };
+      else S.points -= 20;
       S.notes.push(got2);
       persist();
       sheet(`<h3>📝 佩奇写给你的</h3>
         <div class="note-big">${NOTES[got2]}</div>
-        <p class="muted tiny" style="text-align:center">已抽 ${S.notes.length} 张 · 剩余积分 ⭐${S.points}</p>
+        <p class="muted tiny" style="text-align:center">已抽 ${S.notes.length} 张 · ${free ? '会员今日免费次数已用' : '剩余积分 ⭐' + S.points}</p>
         <button class="btn btn-primary btn-lg" onclick="document.querySelector('.sheet-mask').remove()">收好了</button>`);
       render();
     };
@@ -1226,6 +1233,107 @@
         ${steps.map((s, i) => `<p><b>${i + 1}.</b> ${s}</p>`).join('')}
       </div>
       <button class="btn btn-primary btn-lg" style="margin-top:14px" onclick="document.querySelector('.sheet-mask').remove()">记住啦</button>`);
+  }
+
+  /* ---------------- 会员 · 激活码 ---------------- */
+  const VIP_ALPHA = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const VIP_SALT = 'kuailepeqi-2026-peizhe';
+  const VIP_PLAN_DAYS = [7, 30, 90, 180, 365, 36500];
+  const VIP_PLAN_NAME = ['7 天', '30 天', '90 天', '180 天', '365 天', '长期'];
+
+  function vipHash(str) {
+    let h = 2166136261 >>> 0;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    return h >>> 0;
+  }
+  /* 校验位：由「套餐 + 随机序号」推出 4 位字符，客户端离线也能验真假 */
+  function vipSign(payload) {
+    let h = vipHash(VIP_SALT + '|' + payload), out = '';
+    for (let i = 0; i < 4; i++) {
+      h = (Math.imul(h, 1103515245) + 12345) >>> 0;
+      out += VIP_ALPHA[(h >>> 15) % 32];
+    }
+    return out;
+  }
+  function vipParse(raw) {
+    const s = String(raw || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+    const body = s.indexOf('KP') === 0 ? s.slice(2) : s;
+    if (body.length !== 10) return null;
+    for (let i = 0; i < body.length; i++) if (VIP_ALPHA.indexOf(body[i]) < 0) return null;
+    const payload = body.slice(0, 6), sign = body.slice(6);
+    const pi = VIP_ALPHA.indexOf(payload[0]);
+    if (pi < 0 || pi >= VIP_PLAN_DAYS.length) return null;
+    if (vipSign(payload) !== sign) return null;
+    return { days: VIP_PLAN_DAYS[pi], plan: VIP_PLAN_NAME[pi] };
+  }
+  function vipOn() { return !!(S.vip && S.vip.until > Date.now()); }
+  function vipLeftDays() { return vipOn() ? Math.ceil((S.vip.until - Date.now()) / DAY) : 0; }
+  /* 会员每天第一次抽纸条免费 */
+  function vipFreeLeft() {
+    if (!vipOn()) return 0;
+    return (S.vipFree && S.vipFree.d === todayStr() && S.vipFree.used) ? 0 : 1;
+  }
+
+  function vipSheet() {
+    if (vipOn()) {
+      const d = new Date(S.vip.until);
+      const leftTxt = S.vip.plan === '长期' ? '长期有效' : '还剩 ' + vipLeftDays() + ' 天';
+      sheet(`<h3>🎫 陪伴会员</h3>
+        <div class="vip-card">
+          <span class="vip-badge">VIP</span>
+          <div><b>${esc(S.vip.plan || '会员')} · 生效中</b>
+          <small>有效期至 ${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 · ${leftTxt}</small></div>
+        </div>
+        <div class="vip-perk">
+          <div><span>📝</span><b>每天免费抽 1 张小纸条</b></div>
+          <div><span>🏅</span><b>昵称旁显示会员标识</b></div>
+          <div><span>💾</span><b>打卡记录永久保留，到期不删</b></div>
+        </div>
+        <div class="sheet-actions col" style="margin-top:14px">
+          <button class="btn btn-ghost btn-lg" id="vipAdd">再输一个码，续期</button>
+          <button class="btn btn-primary btn-lg" id="vipOk">知道啦</button>
+        </div>`);
+      $('#vipOk').onclick = closeSheet;
+      $('#vipAdd').onclick = () => vipInputSheet(true);
+      return;
+    }
+    vipInputSheet(false);
+  }
+
+  function vipInputSheet(hasCode) {
+    sheet(`<h3>🎫 陪伴会员</h3>
+      <p class="sheet-sub">${hasCode ? '再输一个激活码，有效期会在原来的基础上往后叠加' : '一个激活码对应一段有效期，输入后立即生效'}</p>
+      <div class="vip-perk">
+        <div><span>📝</span><b>每天免费抽 1 张小纸条</b></div>
+        <div><span>🏅</span><b>昵称旁显示会员标识</b></div>
+        <div><span>💾</span><b>打卡记录永久保留，到期不删</b></div>
+      </div>
+      <input class="vip-input" id="vipCode" placeholder="KP-XXXXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      <div class="sheet-actions col" style="margin-top:12px">
+        <button class="btn btn-primary btn-lg" id="vipAct">激活会员</button>
+        <button class="btn btn-ghost btn-lg" id="vipCancel">${hasCode ? '先不续' : '先看看'}</button>
+      </div>
+      <p class="muted tiny" style="text-align:center;margin-top:10px">还没有激活码？去菜单里点「联系客服」找我买</p>`);
+
+    const act = () => {
+      const el = $('#vipCode');
+      const r = vipParse(el.value);
+      if (!r) {
+        el.classList.add('shake');
+        setTimeout(() => el.classList.remove('shake'), 600);
+        return toast('激活码不对，检查一下有没有输错', '⚠️');
+      }
+      const base = Math.max(Date.now(), (S.vip && S.vip.until) || 0);
+      S.vip = { until: base + r.days * DAY, code: el.value.trim().toUpperCase(), plan: r.plan };
+      S.vipFree = { d: '', used: false };
+      persist();
+      render();
+      toast(`开通成功，${r.plan}会员已生效`, '🎉');
+      setTimeout(vipSheet, 500);
+    };
+    $('#vipAct').onclick = act;
+    $('#vipCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') act(); });
+    $('#vipCancel').onclick = closeSheet;
   }
 
   function serviceSheet() {
@@ -1325,6 +1433,7 @@
         <div class="menu-list">
           ${installed ? '' : `<button class="menu-row" id="mInstall"><span>📲</span><div><b>安装到手机桌面</b><small>像 App 一样点图标就打开</small></div></button>`}
           ${isAndroid ? `<button class="menu-row" id="mApk"><span>📥</span><div><b>下载安卓 App</b><small>安装包下载到手机，装好就是原生应用</small></div></button>` : ''}
+          <button class="menu-row" id="mVip"><span>🎫</span><div><b>会员中心</b><small>${vipOn() ? '已开通 · 还剩 ' + vipLeftDays() + ' 天' : '输入激活码开通'}</small></div></button>
           <button class="menu-row" id="mService"><span>💬</span><div><b>联系客服</b><small>加微信，问题随时找我</small></div></button>
           <button class="menu-row" id="mCopy"><span>🔗</span><div><b>复制链接</b><small>粘贴到聊天框就能打开</small></div></button>
           <button class="menu-row danger" id="mLogout"><span>🚪</span><div><b>退出登录</b><small>记录会保留，可重新登录</small></div></button>
@@ -1333,6 +1442,7 @@
       if (mi) mi.onclick = installSheet;
       const ma = $('#mApk');
       if (ma) ma.onclick = downloadApk;
+      $('#mVip').onclick = vipSheet;
       $('#mService').onclick = serviceSheet;
       $('#mCopy').onclick = copyLink;
       $('#mLogout').onclick = logout;
