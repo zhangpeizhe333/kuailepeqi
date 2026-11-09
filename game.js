@@ -1184,6 +1184,26 @@
     ta.remove();
     return ok;
   }
+  const APK_URL = 'https://zhangpeizhe333.github.io/kuailepeqi/kuailepeqi.apk';
+  function downloadApk() {
+    const inWx = /MicroMessenger/i.test(navigator.userAgent);
+    if (inWx) {
+      sheet(`<h3>📥 下载安卓 App</h3>
+        <p class="sheet-sub">微信里不能直接下载安装包，需要先换到浏览器</p>
+        <div class="rule-list">
+          <p><b>1.</b> 点右上角「···」</p>
+          <p><b>2.</b> 选择「在浏览器中打开」</p>
+          <p><b>3.</b> 在浏览器菜单里再点「下载安卓 App」就能下载安装啦</p>
+        </div>
+        <button class="btn btn-primary btn-lg" style="margin-top:14px" onclick="document.querySelector('.sheet-mask').remove()">知道啦</button>`);
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = APK_URL; a.download = 'kuailepeqi.apk';
+    document.body.appendChild(a); a.click(); a.remove();
+    toast('安装包开始下载，下完点开安装', '📥');
+  }
+
   function installSheet() {
     const ua = navigator.userAgent;
     const isIOS = /iPhone|iPad|iPod/i.test(ua);
@@ -1298,16 +1318,20 @@
     $('#nickBtn').addEventListener('click', openNickEdit);
     $('#menuBtn').addEventListener('click', () => {
       const installed = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+      const isAndroid = /Android/i.test(navigator.userAgent);
       sheet(`<h3>${esc(S.nickname || '我')} 的菜单</h3>
         <p class="sheet-sub">复制链接给朋友，或管理当前账号</p>
         <div class="menu-list">
           ${installed ? '' : `<button class="menu-row" id="mInstall"><span>📲</span><div><b>安装到手机桌面</b><small>像 App 一样点图标就打开</small></div></button>`}
+          ${isAndroid ? `<button class="menu-row" id="mApk"><span>📥</span><div><b>下载安卓 App</b><small>安装包下载到手机，装好就是原生应用</small></div></button>` : ''}
           <button class="menu-row" id="mService"><span>💬</span><div><b>联系客服</b><small>加微信，问题随时找我</small></div></button>
           <button class="menu-row" id="mCopy"><span>🔗</span><div><b>复制链接</b><small>粘贴到聊天框就能打开</small></div></button>
           <button class="menu-row danger" id="mLogout"><span>🚪</span><div><b>退出登录</b><small>记录会保留，可重新登录</small></div></button>
         </div>`);
       const mi = $('#mInstall');
       if (mi) mi.onclick = installSheet;
+      const ma = $('#mApk');
+      if (ma) ma.onclick = downloadApk;
       $('#mService').onclick = serviceSheet;
       $('#mCopy').onclick = copyLink;
       $('#mLogout').onclick = logout;
