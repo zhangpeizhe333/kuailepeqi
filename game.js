@@ -386,6 +386,7 @@
         ])}
       </div>
       ${healthHTML(SMOKE_HEALTH, started)}
+      ${communityCard('smoke')}
       ${infoCard('smoke', '戒烟', `
         <div><label>烟龄（年）</label><input id="eYears" type="number" min="0" value="${m.cfg.years}"></div>
         <div><label>每天（支）</label><input id="eCigs" type="number" min="1" value="${m.cfg.cigs}"></div>
@@ -477,6 +478,7 @@
         ])}
       </div>
       ${healthHTML(ALCOHOL_HEALTH, started)}
+      ${communityCard('alcohol')}
       ${infoCard('alcohol', '戒酒', `
         <div><label>酒龄（年）</label><input id="aYears" type="number" min="0" value="${m.cfg.years}"></div>
         <div><label>白酒（斤/天）</label><input id="aBJ" type="number" min="0" step="0.1" value="${m.cfg.baijiu}"></div>
@@ -573,8 +575,9 @@
       ${titleBar('fit', FIT_TITLES)}
       <div class="card">
         <h3>📊 运动数据</h3>
-        ${statsRow([['BMI', bmi.toFixed(1)], ['身材', bmi > 23.9 ? '偏胖' : bmi < 18.5 ? '偏瘦' : '完美'], ['已坚持', (m.total || 0) + ' 天']])}
+        ${statsRow([['BMI', bmi.toFixed(1)], ['身材', bmi > 23.9 ? '偏胖' : bmi < 18.5 ? '偏瘦' : '完美'], ['已坚持', Math.max(0, Math.floor((Date.now() - c.started) / DAY)) + ' 天'], ['开始日期', (() => { const d = new Date(c.started); return (d.getMonth() + 1) + '月' + d.getDate() + '日'; })()]])}
       </div>
+      ${communityCard('fit')}
       ${infoCard('fit', '健身', `
         <div><label>身高（cm）</label><input id="fH" type="number" min="50" max="250" value="${c.h}"></div>
         <div><label>体重（kg）</label><input id="fW" type="number" min="10" max="400" step="0.1" value="${c.w}"></div>
@@ -654,13 +657,20 @@
   let pkClockTimer = null;
   let feedTimer = null;
 
-  /* 生命值：苹果 / 蛋糕 / 蘑菇 各贡献 1 天，随现实时间持续消耗，三者都归零才离开 */
+  /* 生命值：满值 100% = 72 小时（1% = 43.2 分钟）。
+     苹果/蛋糕/蘑菇各最多贡献 24 小时（33%），随现实时间消耗；
+     初始 1%：只在生命 ≤1% 时按 43.2 分钟倒计时（不喂就归零变十字架），
+     生命高于 1% 时初始 1% 固定保留、不消耗 */
+  const BASE_MS = 2592e3; /* 43.2 分钟 = 1% */
   function lifeLeft(st) {
     const now = Date.now();
-    return LIFE_FOODS.reduce((sum, k) => sum + Math.max(0, Math.min(DAY, (st.life[k] || 0) - now)), 0);
+    const food = LIFE_FOODS.reduce((sum, k) => sum + Math.max(0, Math.min(DAY, (st.life[k] || 0) - now)), 0);
+    const foodPct = food / (DAY * 3) * 100;
+    const base = foodPct >= 1 ? BASE_MS : Math.max(0, (st.graceUntil || 0) - now);
+    return food + base;
   }
   function lifePct(st) {
-    return Math.round(lifeLeft(st) / (DAY * 3) * 100);
+    return Math.min(100, Math.floor(lifeLeft(st) / (DAY * 3) * 100));
   }
   function effectPct(st, k) {
     const until = k === 'apple' ? st.ghostUntil : k === 'cake' ? st.bigUntil : st.girlUntil;
@@ -742,6 +752,7 @@
       if (typeof st[k] !== 'number') st[k] = 0;
     });
     if (typeof st.dead !== 'boolean') st.dead = false;
+    if (typeof st.graceUntil !== 'number') st.graceUntil = 0;
     if (typeof st.teaseCount !== 'number') st.teaseCount = 0;
     if (typeof st.cheerTotal !== 'number') st.cheerTotal = 0;
     if (typeof st.joy !== 'number') st.joy = 0;
@@ -762,6 +773,10 @@
   }
   function pkTick() {
     const st = pkState();
+    const now = Date.now();
+    /* 生命高于 1% 时持续为初始 1% 续期；跌破 1% 后用剩余宽限（43.2 分钟）倒计时 */
+    const food = LIFE_FOODS.reduce((s, k) => s + Math.max(0, Math.min(DAY, (st.life[k] || 0) - now)), 0);
+    if (!st.dead && food / (DAY * 3) * 100 >= 1) st.graceUntil = now + BASE_MS;
     if (!st.dead && lifeLeft(st) <= 0) {
       st.dead = true;
       st.charm = 0;
@@ -928,21 +943,13 @@
   }
 
   function revivePeki() {
-    sheet(`<h3>重新养一只佩奇？</h3>
-      <p class="sheet-sub">魅力值从 0 开始，之前的洗澡池、大脑袋和女孩都会消失。</p>
-      <div class="sheet-actions">
-        <button class="btn btn-ghost" id="revNo">再想想</button>
-        <button class="btn btn-primary" id="revYes">重新养一只</button>
-      </div>`);
-    $('#revNo').onclick = closeSheet;
-    $('#revYes').onclick = () => {
-      const keep = S.peki && typeof S.peki.cheerTotal === 'number' ? S.peki.cheerTotal : 0;
-      const t0 = Date.now();
-      S.peki = { charm: 0, lastFeed: t0, lastTease: 0, ghostUntil: 0, bigUntil: 0, girlUntil: 0, ptUntil: 0, dead: false, cheerTotal: keep, teaseCount: 0, joy: 0, joyUntil: 0, life: { apple: t0 + DAY, cake: t0 + DAY, mushroom: t0 + DAY } };
-      persist(); closeSheet();
-      toast('新佩奇来啦，记得常喂它', '🐣');
-      renderPeki();
-    };
+    /* 直接重新开始，不再二次确认 */
+    const keep = S.peki && typeof S.peki.cheerTotal === 'number' ? S.peki.cheerTotal : 0;
+    const t0 = Date.now();
+    S.peki = { charm: 0, lastFeed: t0, lastTease: 0, ghostUntil: 0, bigUntil: 0, girlUntil: 0, ptUntil: 0, dead: false, cheerTotal: keep, teaseCount: 0, joy: 0, joyUntil: 0, graceUntil: t0 + BASE_MS, life: { apple: 0, cake: 0, mushroom: 0 } };
+    persist();
+    toast('新佩奇来啦，43 分钟内记得喂它', '🐣');
+    renderPeki();
   }
 
   function renderPeki() {
@@ -1030,7 +1037,7 @@
         </div>
       </div>
       ${dead
-        ? `<div class="dock single"><button class="act primary" id="revivePk">🪦 重新养一只佩奇</button></div>`
+        ? `<div class="dock single"><button class="act primary" id="revivePk">🔄 重新开始</button></div>`
         : `<div class="dock">
             <button class="act" id="feedBtn">🍽️ 喂食</button>
             <button class="act" id="teaseBtn">💃 逗一逗</button>
@@ -1219,27 +1226,27 @@
     toast('安装包开始下载，下完点开安装', '📥');
   }
 
-  function installSheet() {
-    const ua = navigator.userAgent;
-    const isIOS = /iPhone|iPad|iPod/i.test(ua);
-    const inWx = /MicroMessenger/i.test(ua);
-    const inWxHint = inWx ? `<p class="muted tiny">⚠️ 你现在在微信里打开：先点右上角「···」→ 选择「在浏览器 / Safari 中打开」，再按下面步骤做。</p>` : '';
-    const steps = isIOS
-      ? ['用 Safari 打开这个游戏（微信里请先「在 Safari 中打开」）',
-         '点屏幕底部中间的「分享」按钮（方框加个箭头 ↑）',
-         '在弹出的列表里找到「添加到主屏幕」',
-         '点右上角「添加」，桌面上就有快乐佩奇的图标啦']
-      : ['用 Chrome 浏览器打开这个游戏（微信里请先「在浏览器中打开」）',
-         '点屏幕右上角的「⋮」三个点菜单',
-         '在菜单里找到「添加到主屏幕」或「安装应用」',
-         '点「添加」，桌面上就有快乐佩奇的图标啦'];
-    sheet(`<h3>📲 安装到手机桌面</h3>
-      <p class="sheet-sub">装好以后不用再找链接，点桌面的图标直接进游戏</p>
-      ${inWxHint}
-      <div class="rule-list">
-        ${steps.map((s, i) => `<p><b>${i + 1}.</b> ${s}</p>`).join('')}
+  /* 分享链接：复制网页链接或安装包链接 */
+  function shareSheet() {
+    sheet(`<h3>🔗 分享链接</h3>
+      <p class="sheet-sub">选一个复制，粘贴给朋友就行</p>
+      <div class="sheet-actions col">
+        <button class="btn btn-primary btn-lg" id="shWeb">📋 复制网页链接</button>
+        <button class="btn btn-ghost btn-lg" id="shApk">📋 复制安装包（APK）链接</button>
+        <button class="btn btn-ghost btn-lg" id="shCancel">取消</button>
       </div>
-      <button class="btn btn-primary btn-lg" style="margin-top:14px" onclick="document.querySelector('.sheet-mask').remove()">记住啦</button>`);
+      <p class="muted tiny" style="text-align:center;margin-top:10px">网页链接：点开就能玩 · 安装包链接：安卓用浏览器打开后下载安装</p>`);
+    $('#shWeb').onclick = async () => {
+      const ok = await copyText(gameUrl());
+      closeSheet();
+      toast(ok ? '网页链接已复制' : '复制失败，请手动复制', ok ? '🔗' : '⚠️');
+    };
+    $('#shApk').onclick = async () => {
+      const ok = await copyText(APK_URL);
+      closeSheet();
+      toast(ok ? '安装包链接已复制' : '复制失败，请手动复制', ok ? '🔗' : '⚠️');
+    };
+    $('#shCancel').onclick = closeSheet;
   }
 
   /* ---------------- 会员 · 激活码 ---------------- */
@@ -1291,21 +1298,23 @@
           <div><b>${esc(S.vip.plan || '会员')} · 生效中</b>
           <small>有效期至 ${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 · ${leftTxt}</small></div>
         </div>
+        <p class="muted tiny" style="text-align:center;margin:10px 0 0">续费：¥6/月 · ¥66/年 · ¥166/永久，找客服拿激活码即输即到</p>
         <div class="vip-perk">
           <div><span>📝</span><b>每天免费抽 1 张小纸条</b></div>
           <div><span>📅</span><b>可自行设置打卡开始时间</b></div>
-          <div><span>💾</span><b>打卡记录永久保留，可备份恢复</b></div>
+          <div><span>🖊️</span><b>忘了打卡？随时补签</b></div>
+          <div><span>🗣️</span><b>社区里尊贵红名，字体更亮眼</b></div>
         </div>
         <div class="sheet-actions col" style="margin-top:14px">
           <button class="btn btn-ghost btn-lg" id="vipStart">📅 设置打卡开始时间</button>
-          <button class="btn btn-ghost btn-lg" id="vipBackup">💾 备份 / 恢复记录</button>
+          <button class="btn btn-ghost btn-lg" id="vipMakeup">🖊️ 补签打卡</button>
           <button class="btn btn-ghost btn-lg" id="vipAdd">再输一个码，续期</button>
           <button class="btn btn-primary btn-lg" id="vipOk">知道啦</button>
         </div>`);
       $('#vipOk').onclick = closeSheet;
       $('#vipAdd').onclick = () => vipInputSheet(true);
       $('#vipStart').onclick = vipStartSheet;
-      $('#vipBackup').onclick = vipBackupSheet;
+      $('#vipMakeup').onclick = vipMakeupSheet;
       return;
     }
     vipInputSheet(false);
@@ -1314,10 +1323,16 @@
   function vipInputSheet(hasCode) {
     sheet(`<h3>🎫 陪伴会员</h3>
       <p class="sheet-sub">${hasCode ? '再输一个激活码，有效期会在原来的基础上往后叠加' : '一个激活码对应一段有效期，输入后立即生效'}</p>
+      <div class="vip-price">
+        <div><b>¥6</b><small>/ 月</small></div>
+        <div><b>¥66</b><small>/ 年</small></div>
+        <div><b>¥166</b><small>/ 永久</small></div>
+      </div>
       <div class="vip-perk">
         <div><span>📝</span><b>每天免费抽 1 张小纸条</b></div>
         <div><span>📅</span><b>可自行设置打卡开始时间</b></div>
-        <div><span>💾</span><b>打卡记录永久保留，可备份恢复</b></div>
+        <div><span>🖊️</span><b>忘了打卡？随时补签</b></div>
+        <div><span>🗣️</span><b>社区里尊贵红名，字体更亮眼</b></div>
       </div>
       <input class="vip-input" id="vipCode" placeholder="KP-XXXXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false">
       <div class="sheet-actions col" style="margin-top:12px">
@@ -1381,49 +1396,45 @@
     $('#dateCancel').onclick = closeSheet;
   }
 
-  /* 会员：备份 / 恢复记录 */
-  function vipBackupSheet() {
+  /* 会员：补签打卡（从开始时间起，漏掉的都能补） */
+  function vipMakeupSheet() {
     if (!vipOn()) return toast('这是会员功能，先去开通会员吧', '🎫');
-    sheet(`<h3>💾 备份打卡记录</h3>
-      <p class="sheet-sub">存一个文件在手机里，换手机、清缓存后都能用它恢复</p>
-      <div class="sheet-actions col">
-        <button class="btn btn-primary btn-lg" id="bkSave">下载备份文件</button>
-        <button class="btn btn-ghost btn-lg" id="bkLoad">从文件恢复</button>
-        <button class="btn btn-ghost btn-lg" id="bkCancel">关闭</button>
+    if (!S.makeup || typeof S.makeup !== 'object') S.makeup = { smoke: [], alcohol: [], fit: [] };
+    const rows = [['smoke', '🚬 戒烟', S.smoke], ['alcohol', '🍺 戒酒', S.alcohol], ['fit', '🏃 运动', S.fit]]
+      .filter(([, , m]) => m && m.cfg && m.cfg.started);
+    if (!rows.length) return toast('还没有开始的项目，先打卡一次再来补签', '🖊️');
+    const today = todayStr();
+    sheet(`<h3>🖊️ 补签打卡</h3>
+      <p class="sheet-sub">忘了打卡的那天，选一下日期就补上，已坚持天数不变但打卡次数 +1</p>
+      ${rows.map(([k, nm, m]) => {
+        const made = (S.makeup[k] || []).length;
+        return `<div class="date-row"><span>${nm}${made ? ` <small class="mk-cnt">(已补 ${made} 天)</small>` : ''}</span><input class="date-input" type="date" data-k="${k}" max="${today}"></div>`;
+      }).join('')}
+      <div class="sheet-actions col" style="margin-top:14px">
+        <button class="btn btn-primary btn-lg" id="mkSave">补上这一天</button>
+        <button class="btn btn-ghost btn-lg" id="mkCancel">取消</button>
       </div>
-      <input type="file" id="bkFile" accept=".json,application/json" style="display:none">
-      <p class="muted tiny" style="margin-top:10px;line-height:1.65">恢复会覆盖当前的打卡记录、积分和小纸条，请确认文件是自己导出的。</p>`);
-    $('#bkSave').onclick = () => {
-      const data = JSON.stringify({ app: 'kuailepeqi', exportedAt: new Date().toISOString(), account: S }, null, 2);
-      const blob = new Blob([data], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `佩奇备份-${todayStr()}.json`;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-      toast('备份文件已保存', '💾');
+      <p class="muted tiny" style="text-align:center;margin-top:10px">只能补开始时间以后、且今天之前没打卡的日子；补签不加积分</p>`);
+    $('#mkCancel').onclick = closeSheet;
+    $('#mkSave').onclick = () => {
+      const dstr = $$('.date-input').map((el) => (el.value ? [el.dataset.k, el.value] : null)).filter(Boolean);
+      if (!dstr.length) return toast('先选一个要补的日期', '🗓️');
+      if (dstr.length > 1) return toast('一次补一天就行，别贪多～', '🗓️');
+      const [k, d] = dstr[0];
+      const m = S[k];
+      const t = new Date(d + 'T00:00:00').getTime();
+      if (!m || !m.cfg || !m.cfg.started) return toast('这个项目还没开始', '🗓️');
+      if (t < m.cfg.started) return toast('那一天还没开始打卡呢', '🗓️');
+      if (t > Date.now()) return toast('不能补以后的日子', '🗓️');
+      if (m.lastDate === d) return toast('这一天已经打过卡啦', '✅');
+      if ((S.makeup[k] || []).includes(d)) return toast('这一天已经补过签了', '✅');
+      if (!S.makeup[k]) S.makeup[k] = [];
+      S.makeup[k].push(d);
+      m.total = (m.total || 0) + 1;
+      persist();
+      closeSheet(); render();
+      toast(`${d.slice(5).replace('-', ' 月 ')} 日补签成功，打卡次数 +1`, '🖊️');
     };
-    $('#bkLoad').onclick = () => $('#bkFile').click();
-    $('#bkFile').onchange = async (e) => {
-      const f = e.target.files && e.target.files[0];
-      if (!f) return;
-      try {
-        const obj = JSON.parse(await f.text());
-        const acc = obj && obj.account ? obj.account : obj;
-        if (!acc || typeof acc !== 'object' || !acc.createdAt) throw new Error('bad');
-        const keep = { wx: S.wx, nickname: S.nickname, avatar: S.avatar };
-        Object.keys(S).forEach((k) => delete S[k]);
-        Object.assign(S, acc, keep);
-        S = fixSave(S);
-        DB.accounts[DB.current] = S;
-        persist();
-        closeSheet(); render();
-        toast('记录恢复好啦', '✅');
-      } catch (err) {
-        toast('这个文件好像不对，换一个试试', '⚠️');
-      }
-    };
-    $('#bkCancel').onclick = closeSheet;
   }
 
   /* ---------------- 好友（Supabase 云端） ---------------- */
@@ -1462,7 +1473,79 @@
     return sbRpc('pk_upsert', {
       p_uid: c.uid, p_token: c.token, p_nick: String(S.nickname || '匿名玩家').slice(0, 20),
       p_avatar: S.avatar || '🐣', p_smoke: d.smoke, p_alcohol: d.alcohol, p_fit: d.fit,
+      p_gender: S.gender === 'girl' ? 'girl' : 'boy', p_vip: vipOn(),
     });
+  }
+  const genderMark = (g) => g === 'girl' ? '<i class="g-mark g-girl">♀</i>' : g === 'boy' ? '<i class="g-mark g-boy">♂</i>' : '';
+  const nameHtml = (p, cls) => `<b class="${cls || ''}${p.vip ? ' vip-name' : ''}">${esc(p.nickname)}${p.vip ? ' <span class="vip-mini">VIP</span>' : ''}</b>`;
+
+  /* 打开和某人的私信聊天（全屏层） */
+  let dmTimer = null, dmPeer = null;
+  async function openDm(peer) {
+    const c = cloudId();
+    dmPeer = peer;
+    const ov = document.createElement('div');
+    ov.className = 'chat-ov';
+    ov.id = 'dmView';
+    ov.innerHTML = `
+      <div class="chat-top">
+        <button class="chat-back" id="dmBack">←</button>
+        <div class="chat-title">${esc(peer.avatar || '🐣')} ${esc(peer.nickname)}</div>
+      </div>
+      <div class="chat-body" id="dmBody"><p class="muted tiny" style="text-align:center">加载中…</p></div>
+      <div class="chat-input">
+        <input id="dmText" maxlength="200" placeholder="说点什么…" autocomplete="off">
+        <button id="dmSend">发送</button>
+      </div>`;
+    document.body.appendChild(ov);
+    const body = $('#dmBody');
+    let lastId = 0;
+    const load = async () => {
+      try {
+        const arr = await sbRpc('pk_dm_fetch', { p_uid: c.uid, p_token: c.token, p_with: peer.uid });
+        const msgs = (arr || []).slice().reverse();
+        if (!msgs.length && lastId === 0) { body.innerHTML = '<p class="muted tiny" style="text-align:center;margin-top:30px">还没有聊过，打个招呼吧～</p>'; return; }
+        if (msgs.length && msgs[msgs.length - 1].mid === lastId) return;
+        lastId = msgs.length ? msgs[msgs.length - 1].mid : 0;
+        const myUid = c.uid;
+        body.innerHTML = msgs.map((m) => `
+          <div class="chat-msg ${m.sender === myUid ? 'mine' : ''}">
+            ${m.sender === myUid ? '' : `<span class="chat-ava">${esc(peer.avatar || '🐣')}</span>`}
+            <div class="chat-bub ${m.sender === myUid ? '' : 'them'}"><b class="${peer.vip ? 'vip-text' : ''}">${esc(m.body)}</b></div>
+          </div>`).join('');
+        body.scrollTop = body.scrollHeight;
+      } catch (err) {
+        body.innerHTML = '<p class="muted tiny" style="text-align:center;margin-top:30px">连不上云端，稍后再试</p>';
+      }
+    };
+    await load();
+    dmTimer = setInterval(load, 4000);
+    $('#dmBack').onclick = () => { clearInterval(dmTimer); dmTimer = null; ov.remove(); };
+    const send = async () => {
+      const el = $('#dmText');
+      const t = el.value.trim();
+      if (!t) return;
+      el.value = '';
+      try {
+        const r = await sbRpc('pk_dm_send', { p_uid: c.uid, p_token: c.token, p_to: peer.uid, p_body: t });
+        if (r && r.ok) { load(); }
+        else if (r && r.err === 'blocked') { toast('你已被对方拉黑，发不出去', '🚫'); }
+        else if (r && r.err === 'self') { toast('这是你自己呀', '🙃'); }
+        else { toast('没发出去，再试一次', '⚠️'); el.value = t; }
+      } catch (err) { toast('网络不太顺，再试一次', '📡'); el.value = t; }
+    };
+    $('#dmSend').onclick = send;
+    $('#dmText').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+  }
+
+  /* 拉黑 / 取消拉黑 */
+  async function toggleBlock(peer, block) {
+    const c = cloudId();
+    try {
+      await sbRpc(block ? 'pk_block' : 'pk_unblock', { p_uid: c.uid, p_token: c.token, p_target: peer.uid });
+      toast(block ? `已拉黑 ${peer.nickname}，不再收到TA的私信` : `已取消拉黑 ${peer.nickname}`, block ? '🚫' : '✅');
+      return true;
+    } catch (err) { toast('网络不太顺，再试一次', '📡'); return false; }
   }
 
   function frRow(p, act) {
@@ -1472,7 +1555,7 @@
     if (p.fit_days) t.push('🏃 ' + p.fit_days + ' 天');
     return `<div class="fr-row">
       <span class="fr-ava">${esc(p.avatar || '🐣')}</span>
-      <div class="fr-info"><b>${esc(p.nickname)}</b><small>${t.length ? t.join(' · ') : '还没开始打卡'}</small></div>
+      <div class="fr-info">${nameHtml(p)}<small>${genderMark(p.gender)} ${t.length ? t.join(' · ') : '还没开始打卡'}</small></div>
       ${act}</div>`;
   }
 
@@ -1482,7 +1565,7 @@
       <p class="sheet-sub">搜昵称加好友，看对方坚持了多少天</p>
       <div class="fr-me">
         <span class="fr-ava">${esc(S.avatar || '🐣')}</span>
-        <div class="fr-info"><b>${esc(S.nickname || '匿名玩家')}</b><small>🚬 ${d.smoke} 天 · 🍺 ${d.alcohol} 天 · 🏃 ${d.fit} 天</small></div>
+        <div class="fr-info">${nameHtml({ nickname: S.nickname || '匿名玩家', vip: vipOn() })}<small>${genderMark(S.gender)} 🚬 ${d.smoke} 天 · 🍺 ${d.alcohol} 天 · 🏃 ${d.fit} 天</small></div>
       </div>
       <div class="fr-search">
         <input id="frQ" placeholder="输入好友昵称" autocomplete="off">
@@ -1495,7 +1578,24 @@
     const listEl = $('#frList'), resEl = $('#frResult');
     const drawList = (arr) => {
       if (!arr || !arr.length) { listEl.innerHTML = '<p class="muted tiny">还没有好友，上面搜昵称加一个吧</p>'; return; }
-      listEl.innerHTML = arr.map((p) => frRow(p, `<button class="fr-btn ghost" data-del="${esc(p.uid)}">移除</button>`)).join('');
+      listEl.innerHTML = arr.map((p) => frRow(p, `<span class="fr-acts"><button class="fr-btn" data-dm="${esc(p.uid)}">💬 私信</button><button class="fr-btn ghost" data-block="${esc(p.uid)}">🚫 拉黑</button><button class="fr-btn ghost" data-del="${esc(p.uid)}">移除</button></span>`)).join('');
+      listEl.querySelectorAll('[data-dm]').forEach((b) => {
+        b.onclick = () => {
+          const p = (arr || []).find((x) => x.uid === b.dataset.dm);
+          if (p) { closeSheet(); openDm(p); }
+        };
+      });
+      listEl.querySelectorAll('[data-block]').forEach((b) => {
+        b.onclick = async () => {
+          const p = (arr || []).find((x) => x.uid === b.dataset.block);
+          if (!p) return;
+          if (b.dataset.on === '1') {
+            if (await toggleBlock(p, false)) { b.textContent = '🚫 拉黑'; b.dataset.on = ''; }
+          } else {
+            if (await toggleBlock(p, true)) { b.textContent = '✅ 已拉黑'; b.dataset.on = '1'; }
+          }
+        };
+      });
       listEl.querySelectorAll('[data-del]').forEach((b) => {
         b.onclick = async () => {
           try {
@@ -1542,6 +1642,177 @@
     $('#frGo').onclick = doSearch;
     $('#frQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
     load();
+    /* 好友数据每 20 秒自动刷新（对方一更新这边就能看到） */
+    const auto = setInterval(() => { if (!$('#frList')) clearInterval(auto); else load(); }, 20000);
+  }
+
+  /* ---------------- 佩奇社区（三个独立群：戒烟 / 戒酒 / 运动） ---------------- */
+  const COMM_META = {
+    smoke: { ico: '🚭', name: '戒烟互助群', desc: '和一起戒烟的伙伴聊聊天，互相打打气' },
+    alcohol: { ico: '🚫', name: '戒酒互助群', desc: '和一起戒酒的伙伴聊聊天，互相打打气' },
+    fit: { ico: '🏃', name: '运动打卡群', desc: '和一起运动的伙伴聊聊天，互相打打气' },
+  };
+  function communityCard(mod) {
+    const mt = COMM_META[mod] || COMM_META.smoke;
+    return `<div class="card comm-card">
+      <div class="comm-info"><b>${mt.name}</b><small>${mt.desc}</small></div>
+      <button class="btn btn-primary sm" id="commEnter" data-mod="${mod}">进入</button>
+    </div>`;
+  }
+
+  let commTimer = null;
+  async function communityView(mod) {
+    if ($('#communityOv')) return;
+    const mt = COMM_META[mod] || COMM_META.smoke;
+    const c = cloudId();
+    const ov = document.createElement('div');
+    ov.className = 'comm-ov';
+    ov.id = 'communityOv';
+    ov.innerHTML = `
+      <div class="chat-top">
+        <button class="chat-back" id="commBack">←</button>
+        <div class="chat-title">${mt.name}</div>
+        <button class="chat-menu" id="commMenu">☰</button>
+      </div>
+      <div class="chat-body" id="commBody"><p class="muted tiny" style="text-align:center;margin-top:30px">正在进入社区…</p></div>
+      <div class="comm-menu-panel hidden" id="commPanel">
+        <button id="cpMembers">👀 查看社区成员</button>
+        <button id="cpLeave">🚪 退出社区</button>
+      </div>
+      <div class="comm-members hidden" id="commMembers"></div>
+      <div class="chat-input">
+        <input id="commText" maxlength="200" placeholder="和大家聊聊今天的坚持…" autocomplete="off">
+        <button id="commSend">发送</button>
+      </div>`;
+    document.body.appendChild(ov);
+    const body = $('#commBody'), panel = $('#commPanel'), mpanel = $('#commMembers');
+    let lastId = 0;
+
+    /* 加入（先上报资料确保云端有记录，再进群；失败自动重试） */
+    body.innerHTML = '<p class="muted tiny" style="text-align:center;margin-top:30px">正在进入社区…</p>';
+    let joined = false;
+    for (let i = 0; i < 3 && !joined; i++) {
+      try {
+        await sbSync().catch(() => {});
+        const r = await sbRpc('pk_join_community', { p_uid: c.uid, p_token: c.token, p_module: mod });
+        if (r && r.ok) joined = true;
+        else await new Promise((res) => setTimeout(res, 1000));
+      } catch (err) { await new Promise((res) => setTimeout(res, 1200)); }
+    }
+    if (!joined) { body.innerHTML = '<p class="muted tiny" style="text-align:center;margin-top:30px">进不去社区，稍后再试</p>'; }
+
+    const esc2 = esc;
+    const drawMsgs = (arr) => {
+      if (!arr || !arr.length) return;
+      let html = '';
+      for (const m of arr) {
+        if (m.mid <= lastId) continue;
+        lastId = m.mid;
+        const mine = m.uid === c.uid;
+        html += `<div class="chat-msg ${mine ? 'mine' : ''}">
+          ${mine ? '' : `<span class="chat-ava">${esc2(m.avatar || '🐣')}</span>`}
+          <div class="chat-who ${mine ? 'r' : ''}">${mine ? '' : `${nameHtml(m)}${genderMark(m.gender)}`}</div>
+          <div class="chat-bub ${mine ? 'mine-bub' : 'them'} ${m.vip ? 'vip-text' : ''}">${esc2(m.body)}</div>
+        </div>`;
+      }
+      if (html) { body.insertAdjacentHTML('beforeend', html); body.scrollTop = body.scrollHeight; }
+    };
+    const load = async () => {
+      try {
+        const arr = await sbRpc('pk_chat_fetch', { p_module: mod, p_since: lastId });
+        if (lastId === 0) body.innerHTML = '';
+        drawMsgs((arr || []).slice().reverse());
+        if (lastId === 0) body.innerHTML = '<p class="muted tiny" style="text-align:center;margin-top:30px">还没有人说话，来打个招呼吧～</p>';
+      } catch (err) { /* 静默重试 */ }
+    };
+    await load();
+    commTimer = setInterval(load, 4000);
+
+    $('#commBack').onclick = () => {   /* 返回只是收起，不退出社区 */
+      clearInterval(commTimer); commTimer = null;
+      ov.remove();
+    };
+    $('#commMenu').onclick = () => panel.classList.toggle('hidden');
+    panel.addEventListener('click', (e) => { if (e.target === panel) panel.classList.add('hidden'); });
+
+    $('#cpLeave').onclick = async () => {
+      try {
+        await sbRpc('pk_leave_community', { p_uid: c.uid, p_token: c.token, p_module: mod });
+        clearInterval(commTimer); commTimer = null;
+        ov.remove();
+        toast(`已退出${mt.name}，下次随时再进`, '👋');
+      } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+    };
+
+    $('#cpMembers').onclick = async () => {
+      panel.classList.add('hidden');
+      mpanel.classList.remove('hidden');
+      mpanel.innerHTML = '<p class="muted tiny" style="text-align:center;padding:20px 0">加载中…</p>';
+      try {
+        const [members, blocks] = await Promise.all([
+          sbRpc('pk_member_list', { p_module: mod }),
+          sbRpc('pk_block_list', { p_uid: c.uid, p_token: c.token }).catch(() => []),
+        ]);
+        const blocked = new Set((blocks || []).map((b) => b.blocked_uid));
+        if (!members || !members.length) { mpanel.innerHTML = '<p class="muted tiny" style="text-align:center;padding:20px 0">社区里还没有人</p>'; return; }
+        mpanel.innerHTML = `<div class="cm-top"><b>社区成员（${members.length}）</b><button id="cmClose">收起</button></div>` +
+          members.map((m) => {
+            const me = m.uid === c.uid;
+            const isBlocked = blocked.has(m.uid);
+            return `<div class="fr-row">
+              <span class="fr-ava">${esc(m.avatar || '🐣')}</span>
+              <div class="fr-info">${nameHtml(m)}${me ? ' <small>(我)</small>' : ''}<small>${genderMark(m.gender)} ${m.vip ? '尊贵会员' : '小伙伴'}</small></div>
+              ${me ? '' : `<span class="fr-acts">
+                <button class="fr-btn" data-cm-dm="${esc(m.uid)}">💬 私信</button>
+                <button class="fr-btn" data-cm-add="${esc(m.uid)}">＋ 好友</button>
+                <button class="fr-btn ghost" data-cm-blk="${esc(m.uid)}">${isBlocked ? '✅ 已拉黑' : '🚫 拉黑'}</button>
+              </span>`}
+            </div>`;
+          }).join('');
+        $('#cmClose').onclick = () => mpanel.classList.add('hidden');
+        const findM = (uid) => (members || []).find((x) => x.uid === uid);
+        mpanel.querySelectorAll('[data-cm-dm]').forEach((b) => {
+          b.onclick = () => { const p = findM(b.dataset.cmDm); if (p) { mpanel.classList.add('hidden'); openDm(p); } };
+        });
+        mpanel.querySelectorAll('[data-cm-add]').forEach((b) => {
+          b.onclick = async () => {
+            try {
+              const r = await sbRpc('pk_add_friend', { p_uid: c.uid, p_token: c.token, p_friend: b.dataset.cmAdd });
+              if (r && r.ok) { toast('加好啦', '🤝'); b.textContent = '已添加'; b.disabled = true; }
+              else if (r && r.err === 'self') toast('这是你自己呀', '🙃');
+              else toast('没加上，再试一次', '⚠️');
+            } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+          };
+        });
+        mpanel.querySelectorAll('[data-cm-blk]').forEach((b) => {
+          b.onclick = async () => {
+            const p = findM(b.dataset.cmBlk);
+            if (!p) return;
+            if (b.dataset.on === '1') {
+              if (await toggleBlock(p, false)) { b.textContent = '🚫 拉黑'; b.dataset.on = ''; }
+            } else {
+              if (await toggleBlock(p, true)) { b.textContent = '✅ 已拉黑'; b.dataset.on = '1'; }
+            }
+          };
+        });
+      } catch (err) {
+        mpanel.innerHTML = '<p class="muted tiny" style="text-align:center;padding:20px 0">连不上云端，稍后再试</p>';
+      }
+    };
+
+    const send = async () => {
+      const el = $('#commText');
+      const t = el.value.trim();
+      if (!t) return;
+      el.value = '';
+      try {
+        const r = await sbRpc('pk_chat_send', { p_uid: c.uid, p_token: c.token, p_module: mod, p_body: t });
+        if (r && r.ok) load();
+        else { toast('没发出去，再试一次', '⚠️'); el.value = t; }
+      } catch (err) { toast('网络不太顺，再试一次', '📡'); el.value = t; }
+    };
+    $('#commSend').onclick = send;
+    $('#commText').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
   }
 
   function serviceSheet() {
@@ -1568,7 +1839,6 @@
     closeSheet();
     toast(ok ? '链接已复制，粘贴给好友就能打开' : '复制失败，长按地址栏手动复制', ok ? '🔗' : '⚠️');
   }
-
   /* ---------------- 动画 ---------------- */
   function heartsBurst(host) {
     if (!host) return;
@@ -1599,7 +1869,11 @@
   function render() {
     $('#ptsBadge').textContent = '⭐ ' + S.points;
     const nb = $('#nickBtn');
-    if (nb) { nb.textContent = S.nickname || '未命名'; nb.title = '点击修改昵称'; }
+    if (nb) {
+      nb.innerHTML = (S.nickname || '未命名') + (vipOn() ? ' <span class="vip-mini">VIP</span>' : '');
+      nb.classList.toggle('vip-name', vipOn());
+      nb.title = '点击修改昵称';
+    }
     if (tab === 'smoke') renderSmoke();
     else if (tab === 'alcohol') renderAlcohol();
     else if (tab === 'fit') renderFit();
@@ -1622,7 +1896,11 @@
       S.nickname = v;
       persist();
       closeSheet();
-      $('#nickBtn').textContent = v;
+      const nb2 = $('#nickBtn');
+      if (nb2) {
+        nb2.innerHTML = (S.nickname || '未命名') + (vipOn() ? ' <span class="vip-mini">VIP</span>' : '');
+        nb2.classList.toggle('vip-name', vipOn());
+      }
       toast('昵称已更新', '✏️');
     };
   }
@@ -1633,28 +1911,29 @@
     $('#wxLogin').addEventListener('click', openWxAuth);
     $$('.tab').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.tab; render(); window.scrollTo(0, 0); }));
     $('#nickBtn').addEventListener('click', openNickEdit);
+    /* 佩奇社区进入按钮（三个群各自独立，事件委托） */
+    document.addEventListener('click', (e) => {
+      const btn = e.target && e.target.closest && e.target.closest('#commEnter');
+      if (btn) { communityView(btn.dataset.mod || 'smoke'); }
+    });
     $('#menuBtn').addEventListener('click', () => {
-      const installed = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
       const isAndroid = /Android/i.test(navigator.userAgent);
       sheet(`<h3>${esc(S.nickname || '我')} 的菜单</h3>
-        <p class="sheet-sub">复制链接给朋友，或管理当前账号</p>
+        <p class="sheet-sub">分享给朋友，或管理当前账号</p>
         <div class="menu-list">
-          ${installed ? '' : `<button class="menu-row" id="mInstall"><span>📲</span><div><b>安装到手机桌面</b><small>像 App 一样点图标就打开</small></div></button>`}
           ${isAndroid ? `<button class="menu-row" id="mApk"><span>📥</span><div><b>下载安卓 App</b><small>安装包下载到手机，装好就是原生应用</small></div></button>` : ''}
+          <button class="menu-row" id="mShare"><span>🔗</span><div><b>分享链接</b><small>复制网页链接或安装包链接</small></div></button>
           <button class="menu-row" id="mVip"><span>🎫</span><div><b>会员中心</b><small>${vipOn() ? '已开通 · 还剩 ' + vipLeftDays() + ' 天' : '输入激活码开通'}</small></div></button>
           <button class="menu-row" id="mFriends"><span>👥</span><div><b>游戏好友</b><small>搜昵称加好友，看对方坚持了多久</small></div></button>
           <button class="menu-row" id="mService"><span>💬</span><div><b>联系客服</b><small>加微信，问题随时找我</small></div></button>
-          <button class="menu-row" id="mCopy"><span>🔗</span><div><b>复制链接</b><small>粘贴到聊天框就能打开</small></div></button>
           <button class="menu-row danger" id="mLogout"><span>🚪</span><div><b>退出登录</b><small>记录会保留，可重新登录</small></div></button>
         </div>`);
-      const mi = $('#mInstall');
-      if (mi) mi.onclick = installSheet;
       const ma = $('#mApk');
       if (ma) ma.onclick = downloadApk;
+      $('#mShare').onclick = shareSheet;
       $('#mVip').onclick = vipSheet;
       $('#mFriends').onclick = friendsSheet;
       $('#mService').onclick = serviceSheet;
-      $('#mCopy').onclick = copyLink;
       $('#mLogout').onclick = logout;
     });
     $('#musicBtn').addEventListener('click', () => {
