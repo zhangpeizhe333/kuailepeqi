@@ -234,6 +234,12 @@
     if (window.QuitMusic && QuitMusic.enabled()) QuitMusic.play();
     /* 静默把昵称和天数同步到云端，好友才搜得到 */
     setTimeout(() => { if (S && S.nickname) sbSync().catch(() => {}); }, 2500);
+    /* 私信提醒：马上查一次，之后每 30 秒查一次 */
+    setTimeout(dmCheck, 3000);
+    if (dmPollTimer) clearInterval(dmPollTimer);
+    dmPollTimer = setInterval(dmCheck, 30000);
+    const bell = $('#dmBell');
+    if (bell) bell.onclick = dmBellSheet;
   }
 
   /* ---------------- 打卡 ---------------- */
@@ -656,6 +662,7 @@
   const LIFE_FOODS = ['apple', 'cake', 'mushroom'];
   let pkClockTimer = null;
   let feedTimer = null;
+  let dmPollTimer = null;
 
   /* 生命值：满值 100% = 72 小时（1% = 43.2 分钟）。
      苹果/蛋糕/蘑菇各最多贡献 24 小时（33%），随现实时间消耗；
@@ -1530,6 +1537,7 @@
         if (!msgs.length && lastId === 0) { body.innerHTML = '<p class="muted tiny" style="text-align:center;margin-top:30px">还没有聊过，打个招呼吧～</p>'; return; }
         if (msgs.length && msgs[msgs.length - 1].mid === lastId) return;
         lastId = msgs.length ? msgs[msgs.length - 1].mid : 0;
+        dmMarkRead(peer.uid, lastId);
         const myUid = c.uid;
         body.innerHTML = msgs.map((m) => `
           <div class="chat-msg ${m.sender === myUid ? 'mine' : ''}">
@@ -1667,6 +1675,49 @@
     load();
     /* 好友数据每 20 秒自动刷新（对方一更新这边就能看到） */
     const auto = setInterval(() => { if (!$('#frList')) clearInterval(auto); else load(); }, 20000);
+  }
+
+  /* ---------------- 顶栏私信提醒（铃铛） ---------------- */
+  let dmLatest = [];
+  async function dmCheck() {
+    const bell = $('#dmBell');
+    if (!bell || !$('#app') || $('#app').classList.contains('hidden')) return;
+    try {
+      const c = cloudId();
+      const arr = await sbRpc('pk_dm_latest', { p_uid: c.uid, p_token: c.token });
+      dmLatest = arr || [];
+      if (!S.dmRead || typeof S.dmRead !== 'object') S.dmRead = {};
+      const unread = dmLatest.filter((m) => (S.dmRead[m.sender] || 0) < m.mid).length;
+      bell.classList.toggle('hidden', !dmLatest.length);
+      bell.classList.toggle('dm-blink', unread > 0);
+      bell.dataset.n = unread;
+    } catch (err) { /* 静默 */ }
+  }
+  function dmMarkRead(uid, mid) {
+    if (!S.dmRead || typeof S.dmRead !== 'object') S.dmRead = {};
+    if ((S.dmRead[uid] || 0) < mid) { S.dmRead[uid] = mid; persist(); }
+    dmCheck();
+  }
+  function dmBellSheet() {
+    if (!dmLatest.length) return toast('还没有收到私信', '✉️');
+    if (!S.dmRead || typeof S.dmRead !== 'object') S.dmRead = {};
+    sheet(`<h3>✉️ 私信</h3>
+      <div class="dm-latest">${dmLatest.map((m) => {
+        const unread = (S.dmRead[m.sender] || 0) < m.mid;
+        return `<button class="fr-row" data-dml="${esc(m.sender)}">
+          <span class="fr-ava">${esc(m.avatar || '🐣')}</span>
+          <div class="fr-info"><b class="${m.vip ? 'vip-name' : ''}">${esc(m.nickname)}${m.vip ? ' <span class="vip-mini">VIP</span>' : ''}</b><small>${genderMark(m.gender)} ${esc(m.body).slice(0, 24)}</small></div>
+          ${unread ? '<span class="dm-dot">新</span>' : ''}
+        </button>`;
+      }).join('')}</div>`);
+    $$('[data-dml]').forEach((b) => {
+      b.onclick = () => {
+        const peer = dmLatest.find((m) => m.sender === b.dataset.dml);
+        if (!peer) return;
+        closeSheet();
+        openDm({ uid: peer.sender, nickname: peer.nickname, avatar: peer.avatar, gender: peer.gender, vip: peer.vip });
+      };
+    });
   }
 
   /* ---------------- 佩奇社区（三个独立群：戒烟 / 戒酒 / 运动） ---------------- */
