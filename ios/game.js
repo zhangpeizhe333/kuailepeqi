@@ -2304,8 +2304,14 @@
       el.value = '';
       try {
         const r = await sbRpc('pk_chat_send', { p_uid: c.uid, p_token: c.token, p_module: mod, p_body: t });
-        if (r && r.ok) load();
-        else { toast('没发出去，再试一次', '⚠️'); el.value = t; }
+        if (r && r.ok) { load(); return; }
+        if (r && r.err === 'not_member') {
+          /* 3 天没进群已被移出：自动重新进群后重发一次 */
+          await sbRpc('pk_join_community', { p_uid: c.uid, p_token: c.token, p_module: mod });
+          const r2 = await sbRpc('pk_chat_send', { p_uid: c.uid, p_token: c.token, p_module: mod, p_body: t });
+          if (r2 && r2.ok) { toast('你 3 天没进群被移出了，已自动重新进群', '🔁'); load(); return; }
+        }
+        toast('没发出去，再试一次', '⚠️'); el.value = t;
       } catch (err) { toast('网络不太顺，再试一次', '📡'); el.value = t; }
     };
     $('#commSend').onclick = send;
