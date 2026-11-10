@@ -279,7 +279,9 @@
     const submit = async () => {
       const user = $('#acctUser').value.trim().toLowerCase();
       const pass = $('#acctPass').value;
-      if (!/^[a-z0-9_]{6,16}$/.test(user)) return toast('账号要 6-16 位字母或数字', '🔑');
+      if (!/^[a-z0-9_]{3,16}$/.test(user)) return toast('账号要 6-16 位字母或数字', '🔑');
+      /* 注册要求 6-16 位；登录放宽到 3-16 位，兼容早期注册的老账号 */
+      if (mode === 'reg' && user.length < 6) return toast('账号要 6-16 位字母或数字', '🔑');
       if (pass.length < 6) return toast('密码至少 6 位', '🔒');
       go.disabled = true;
       try {
