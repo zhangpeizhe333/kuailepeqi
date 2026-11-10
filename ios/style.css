@@ -915,6 +915,62 @@ h3 small { font-weight: 400; }
   .topbar-brand:has(.tb-en) .nick-chip .nk-t { max-width: 54px; }
 }
 
+/* ---------------- VIP 视觉：红字 / 星星 / 专属小花 / 萤火虫 ---------------- */
+/* 会员的群聊、私聊文字变红 */
+.vip-text { color: #ff6b81 !important; text-shadow: 0 0 10px rgba(255, 107, 129, .28); }
+
+/* 佩奇与马尾女孩身边的小星星 */
+.vip-stars { pointer-events: none; }
+.vip-star {
+  transform-box: fill-box; transform-origin: center;
+  animation: vipStarTwinkle 2.2s ease-in-out infinite;
+  filter: drop-shadow(0 0 3px rgba(255, 233, 168, .85));
+}
+@keyframes vipStarTwinkle {
+  0%, 100% { opacity: .32; transform: scale(.62) rotate(-10deg); }
+  50% { opacity: 1; transform: scale(1.28) rotate(10deg); }
+}
+
+/* 专属小花按钮 */
+.chat-input .flower-btn {
+  width: 42px; padding: 0; font-size: 20px; line-height: 1; font-weight: 400;
+  color: #6d2438; background: linear-gradient(135deg, #ffd7e4, #ff9eb8);
+  border: 1px solid rgba(255, 158, 184, .6);
+  box-shadow: 0 2px 10px rgba(255, 120, 160, .28);
+  transition: transform .12s;
+}
+.chat-input .flower-btn:active { transform: scale(.93); }
+.chat-input .flower-btn:disabled { opacity: .55; }
+
+/* 小花消息气泡 */
+.chat-bub.flower-bub {
+  padding: 7px 14px;
+  background: linear-gradient(160deg, rgba(255, 190, 214, .32), rgba(255, 150, 190, .18));
+  border-color: rgba(255, 158, 184, .5);
+}
+.fx-flower {
+  display: inline-block; font-size: 27px; line-height: 1.1;
+  animation: flowerPop 2.6s ease-in-out infinite;
+  filter: drop-shadow(0 0 9px rgba(255, 150, 190, .6));
+}
+@keyframes flowerPop {
+  0%, 100% { transform: scale(1) rotate(-4deg); }
+  50% { transform: scale(1.14) rotate(5deg); }
+}
+
+/* 小朋友身边的萤火虫 */
+.ff-fly {
+  transform-box: fill-box; transform-origin: center;
+  animation: ffDrift 6s ease-in-out infinite;
+}
+@keyframes ffDrift {
+  0%, 100% { transform: translate(0, 0) scale(.9); opacity: .5; }
+  25% { transform: translate(16px, -18px) scale(1.08); opacity: 1; }
+  50% { transform: translate(-6px, -32px) scale(.95); opacity: .72; }
+  75% { transform: translate(-18px, -14px) scale(1.12); opacity: 1; }
+}
+.vip-ff { pointer-events: none; }
+
 
 /* ===== iOS 版：内购价格按钮 / 说明 / 恢复购买 ===== */
 .vip-price > .vip-buy {
