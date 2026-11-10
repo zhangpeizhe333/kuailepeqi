@@ -15,7 +15,7 @@
 (function () {
   var v = 'v' + Date.now();
   document.write('<link rel="stylesheet" href="style.css?' + v + '">');
-  ['art.js', 'music.js', 'game.js'].forEach(function (f) {
+  ['i18n.js', 'art.js', 'music.js', 'game.js'].forEach(function (f) {
     document.write('<script src="' + f + '?' + v + '"><\/script>');
   });
 })();
