@@ -259,6 +259,9 @@
     '删除这条登录记录': 'Delete this login record',
     '删除这条登录记录？': 'Delete this login record?',
     '已删除该登录记录': 'Login record deleted',
+    '已删除该登录记录和云端资料': 'Login record and cloud profile deleted',
+    '正在清除…': 'Deleting…',
+    '云端好友资料也会一起清除，好友将搜不到这个账号。': 'Cloud profile is removed too — friends will no longer find this account.',
 
     /* 好友 */
     '👥 游戏好友': '👥 Friends',
@@ -533,7 +536,7 @@
     [/^打卡断了也不影响称号，随时可以接着打。当前累计打卡 (\d+) 天。$/, "Streak breaks don't affect titles — pick up anytime. Total: $1 days."],
     [/^只会删除你自己这边的记录，和「(.+)」的聊天会从私信列表消失。确定删除吗？$/, 'Only your copy is deleted — the chat with "$1" stays on their side. Delete?'],
     [/^会清空 (.+) 的全部打卡记录和开始时间，不能撤销。$/, "This erases all of $1's check-ins and start date. It can't be undone."],
-    [/^「(.+)」的打卡记录、积分、小纸条和小秘密都会被删除，无法恢复。$/, '"$1"\'s check-ins, points, notes and secrets will be gone for good.'],
+    [/^「(.+)」的打卡记录、积分、小纸条都会被删除，无法恢复。$/, '"$1"\'s check-ins, points and notes will be deleted for good.'],
     [/^已抽 (\d+) 张 · 会员今日免费次数已用$/, 'Drawn: $1 · free VIP draw used'],
     [/^已抽 (\d+) 张 · 剩余积分 ⭐(\d+)$/, 'Drawn: $1 · points left ⭐$2'],
     [/^📝 已抽到的小纸条（(\d+) 张）$/, '📝 Notes collected ($1)'],
@@ -595,6 +598,11 @@
 
   var ZH = /[\u4e00-\u9fff]/;
 
+  /* iOS 构建脚本会注入：CUR = '$'（英文界面货币符号）与 PRICE 价格表；
+     网页 / 安卓保持空值，仍用 ¥，价格不变 */
+  var CUR = '$';
+  var PRICE = { '¥8': '$1.99', '¥88': '$19.99', '¥188': '$39.99' };
+
   function detect() {
     try {
       var s = localStorage.getItem('kk_lang');
@@ -606,13 +614,21 @@
   var LANG = detect();
 
   function tr(s) {
-    if (LANG !== 'en' || !ZH.test(s)) return null;
-    if (Object.prototype.hasOwnProperty.call(EXACT, s)) return EXACT[s];
-    for (var i = 0; i < RES.length; i++) {
-      RES[i][0].lastIndex = 0;
-      if (RES[i][0].test(s)) return s.replace(RES[i][0], RES[i][1]);
+    if (LANG !== 'en') return null;
+    if (Object.prototype.hasOwnProperty.call(PRICE, s)) return PRICE[s];
+    if (!ZH.test(s)) return null;
+    var out = null;
+    if (Object.prototype.hasOwnProperty.call(EXACT, s)) out = EXACT[s];
+    else {
+      for (var i = 0; i < RES.length; i++) {
+        RES[i][0].lastIndex = 0;
+        if (RES[i][0].test(s)) { out = s.replace(RES[i][0], RES[i][1]); break; }
+      }
     }
-    return null;
+    if (out === null) return null;
+    /* iOS 英文界面：¥ → $（在最终译文上替换，避免动到正则里的捕获符） */
+    if (CUR) out = out.split('¥').join(CUR);
+    return out;
   }
 
   /* 只跳过聊天气泡（用户输入内容）；社区的提示语（进入中/退出等）照常翻译 */
@@ -624,11 +640,13 @@
     while (w.nextNode()) nodes.push(w.currentNode);
     for (var i = 0; i < nodes.length; i++) {
       var n = nodes[i];
-      if (!n.nodeValue || !ZH.test(n.nodeValue)) continue;
+      if (!n.nodeValue) continue;
+      var core = n.nodeValue.trim();
+      /* 纯价格节点（如 ¥8）没有中文，但 iOS 版需要换成 $1.99 */
+      if (!ZH.test(n.nodeValue) && !Object.prototype.hasOwnProperty.call(PRICE, core)) continue;
       var p = n.parentElement;
       if (!p || p.closest('script,style')) continue;
       if (p.closest(SKIP_SEL)) continue;
-      var core = n.nodeValue.trim();
       if (p.classList && p.classList.contains('cal-w') && WD_MAP[core]) { n.nodeValue = WD_MAP[core]; continue; }
       var t = tr(core);
       if (!t) {
