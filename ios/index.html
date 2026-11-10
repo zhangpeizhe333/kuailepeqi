@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>快乐佩奇：戒烟戒酒跟我走</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#171227">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<script>
+/* 每次打开都带新版本号请求资源，避免手机缓存旧代码 */
+(function () {
+  var v = 'v' + Date.now();
+  document.write('<link rel="stylesheet" href="style.css?' + v + '">');
+  ['art.js', 'music.js', 'iap.js', 'game.js'].forEach(function (f) {
+    document.write('<script src="' + f + '?' + v + '"><\/script>');
+  });
+})();
+</script>
+</head>
+<body>
+
+<!-- ============ 登录页 ============ -->
+<div id="login" class="login">
+  <div class="login-scene" aria-hidden="true">
+    <div class="scene-stars"></div>
+    <div class="scene-hills"></div>
+    <div class="scene-house">🏠</div>
+  </div>
+  <div class="login-card">
+    <div class="logo">
+      <span class="logo-emoji">
+        <svg viewBox="0 0 100 100" width="68" height="68" xmlns="http://www.w3.org/2000/svg">
+          <line x1="29" y1="29" x2="71" y2="71" stroke="#e35d6a" stroke-width="9" stroke-linecap="round"/>
+          <circle cx="50" cy="50" r="32" fill="none" stroke="#e35d6a" stroke-width="9"/>
+          <ellipse cx="50" cy="51" rx="14" ry="12" fill="#ffb3c1" stroke="#d1748a" stroke-width="2.5"/>
+          <ellipse cx="45" cy="51" rx="3" ry="4.6" fill="#c1667c"/>
+          <ellipse cx="55" cy="51" rx="3" ry="4.6" fill="#c1667c"/>
+          <path d="M41 43 Q39 34 47 36.5 Q48.5 38.5 47.5 41 Z" fill="#f59aa9" stroke="#d1748a" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M59 43 Q61 34 53 36.5 Q51.5 38.5 52.5 41 Z" fill="#f59aa9" stroke="#d1748a" stroke-width="1.6" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <h1>快乐佩奇</h1>
+      <p class="sub-title">戒烟戒酒跟我走</p>
+      <p class="credit">游戏制作：张佩喆</p>
+    </div>
+    <p class="login-sub">断崖式戒烟 · 清醒戒酒 · 运动打卡<br>让小朋友陪你一起变健康</p>
+    <button id="wxLogin" class="wx-btn">
+      <span class="wx-ico">💬</span> 一键登录
+    </button>
+    <button id="acctLogin" class="acct-btn">
+      <span>🔑</span> 账号密码登录
+    </button>
+    <p class="muted tiny" style="text-align:center;margin-top:14px">一键登录数据存本机 · 账号登录可跨手机找回</p>
+  </div>
+</div>
+
+<!-- ============ 主界面 ============ -->
+<div id="app" class="hidden">
+  <header class="topbar">
+    <div class="topbar-brand">
+      <span class="brand-ico">
+        <svg viewBox="0 0 100 100" width="22" height="22" xmlns="http://www.w3.org/2000/svg">
+          <line x1="29" y1="29" x2="71" y2="71" stroke="#e35d6a" stroke-width="10" stroke-linecap="round"/>
+          <circle cx="50" cy="50" r="32" fill="none" stroke="#e35d6a" stroke-width="10"/>
+          <ellipse cx="50" cy="51" rx="14" ry="12" fill="#ffb3c1" stroke="#d1748a" stroke-width="2.5"/>
+          <ellipse cx="45" cy="51" rx="3" ry="4.6" fill="#c1667c"/>
+          <ellipse cx="55" cy="51" rx="3" ry="4.6" fill="#c1667c"/>
+        </svg>
+      </span>
+      <span class="tb-wrap">快乐佩奇<small class="brand-credit">戒烟戒酒跟我走</small></span>
+      <button id="nickBtn" class="nick-chip" title="点击修改昵称">玩家</button>
+    </div>
+    <div class="topbar-acts">
+      <button id="dmBell" class="icon-btn" title="私信消息">✉️</button>
+      <button id="musicBtn" class="icon-btn" title="音乐：卡农（可关闭）">🎵</button>
+      <button id="menuBtn" class="icon-btn" title="菜单">☰</button>
+    </div>
+  </header>
+
+  <main id="main"></main>
+
+  <nav class="tabbar">
+    <button class="tab active" data-tab="peki"><span class="tab-ico" id="pekiIco"></span>首页</button>
+    <button class="tab" data-tab="smoke"><span>🚬</span>戒烟</button>
+    <button class="tab" data-tab="alcohol"><span>🍺</span>戒酒</button>
+    <button class="tab" data-tab="fit"><span>🏃</span>运动</button>
+  </nav>
+</div>
+
+<audio id="bgm" src="bgm.mp3" loop preload="auto"></audio>
+<div id="sheetRoot"></div>
+<div id="toastWrap"></div>
+
+
+</body>
+</html>
