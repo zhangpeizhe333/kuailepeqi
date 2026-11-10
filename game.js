@@ -36,7 +36,7 @@
       wx: null, nickname: '', gender: 'boy', age: '', signature: '无语中..', avatar: '🐣',
       smoke: null, alcohol: null, fit: null,
       points: 0, pointsToday: { d: '', n: 0 }, teaseToday: { d: '', n: 0 }, notes: [], msgs: [], pekiCheer: 0,
-      vip: { until: 0 }, vipFree: { d: '', used: false }, cloud: null,
+      vip: { until: 0 }, vipFree: { d: '', used: false }, cloud: null, acct: '',
       peki: { charm: 0, lastFeed: 0, lastTease: 0, ghostUntil: 0, bigUntil: 0, girlUntil: 0, ptUntil: 0, dead: false },
       clock: { target: 0 },
       createdAt: Date.now()
@@ -152,6 +152,8 @@
       <button class="wx-new" id="wxNew"><span>＋</span>使用新的微信登录</button>
       <p class="muted tiny" style="text-align:center;margin-top:12px">每个微信对应独立的存档，换微信就是换一份坚持</p>`);
     $$('.wx-pick').forEach((b) => b.addEventListener('click', () => {
+      const acc = DB.accounts[b.dataset.wx];
+      if (acc && acc.acct) { closeSheet(); return openAcctLogin(acc.acct); }
       S = fixSave(DB.accounts[b.dataset.wx]);
       DB.current = b.dataset.wx;
       persist(); closeSheet();
@@ -212,8 +214,133 @@
       setTimeout(() => { toast(`欢迎你，${nick}！`, '🎉'); enterApp(); }, 150);
     };
   }
+  /* ---------------- 账号密码登录（与本地一键登录并存） ---------------- */
+  function restoreDays(acc, r) {
+    const now = Date.now();
+    if (r.smoke > 0 && !acc.smoke) acc.smoke = { cfg: { years: 0, cigs: 0, price: 0, started: now - r.smoke * DAY }, total: r.smoke, lastDate: '', lastTime: null, kidName: '', days: [] };
+    if (r.alcohol > 0 && !acc.alcohol) acc.alcohol = { cfg: { years: 0, baijiu: 0, baijiuP: 0, bottle: 0, bottleP: 0, started: now - r.alcohol * DAY }, total: r.alcohol, lastDate: '', lastTime: null, days: [] };
+    if (r.fit > 0 && !acc.fit) acc.fit = { cfg: { h: 170, w: 65, started: now - r.fit * DAY }, total: r.fit, lastDate: '', lastTime: null, days: [] };
+  }
+  function applyAcctLogin(user, r) {
+    const key = 'acct_' + user;
+    let acc = DB.accounts[key];
+    if (!acc) {
+      acc = fixSave(freshSave());
+      acc.wx = { wxid: key, nick: r.nickname || user };
+      acc.nickname = r.nickname || user;
+      acc.avatar = r.avatar || '🐷';
+      restoreDays(acc, r);
+    }
+    acc.acct = user;
+    acc.cloud = { uid: r.uid, token: r.token };
+    DB.accounts[key] = acc;
+    DB.current = key;
+    S = acc;
+    persist(); closeSheet();
+    setTimeout(() => { toast(`欢迎回来，${acc.nickname}！`, '🎉'); enterApp(); }, 150);
+  }
+  function acctErrMsg(err, mode) {
+    const map = {
+      user_taken: '这个账号已经被注册了，换一个吧',
+      bad_user: '账号要 3-16 位字母或数字',
+      bad_pass: mode === 'login' ? '密码不对，再想想' : '密码至少 6 位',
+      no_user: '没有这个账号，切到「注册新账号」吧',
+      locked: '密码错太多次了，10 分钟后再试',
+    };
+    return map[err] || '操作失败，稍后再试';
+  }
+  function openAcctLogin(prefill) {
+    sheet(`<h3>🔑 账号登录</h3>
+      <p class="sheet-sub">登录后换手机、换浏览器也能找回打卡记录</p>
+      <div class="seg" id="acctMode">
+        <button class="seg-b active" data-m="login">登录</button>
+        <button class="seg-b" data-m="reg">注册新账号</button>
+      </div>
+      <div class="form">
+        <label>账号</label>
+        <input id="acctUser" maxlength="16" placeholder="3-16 位字母或数字" autocomplete="username" value="${esc(prefill || '')}">
+        <label>密码</label>
+        <input id="acctPass" type="password" maxlength="32" placeholder="至少 6 位" autocomplete="current-password">
+        <div id="acctNickWrap" class="hidden"><label>昵称</label>
+          <input id="acctNick" maxlength="12" placeholder="显示在好友列表里的名字"></div>
+        <button class="btn btn-primary btn-lg" id="acctGo" style="margin-top:12px">登录</button>
+      </div>
+      <p class="muted tiny" style="text-align:center;margin-top:10px">忘记密码找客服重置 · 账号只用来同步记录</p>`);
+    let mode = 'login';
+    const go = $('#acctGo');
+    $$('#acctMode .seg-b').forEach((b) => b.addEventListener('click', () => {
+      mode = b.dataset.m;
+      $$('#acctMode .seg-b').forEach((x) => x.classList.remove('active'));
+      b.classList.add('active');
+      $('#acctNickWrap').classList.toggle('hidden', mode !== 'reg');
+      go.textContent = mode === 'reg' ? '注册并登录' : '登录';
+    }));
+    const submit = async () => {
+      const user = $('#acctUser').value.trim().toLowerCase();
+      const pass = $('#acctPass').value;
+      if (!/^[a-z0-9_]{3,16}$/.test(user)) return toast('账号要 3-16 位字母或数字', '🔑');
+      if (pass.length < 6) return toast('密码至少 6 位', '🔒');
+      go.disabled = true;
+      try {
+        const r = mode === 'reg'
+          ? await sbRpc('pk_register', { p_user: user, p_pass: pass, p_nick: ($('#acctNick').value || '').trim() })
+          : await sbRpc('pk_login', { p_user: user, p_pass: pass });
+        if (!r || !r.ok) { go.disabled = false; return toast(acctErrMsg(r && r.err, mode), '⚠️'); }
+        applyAcctLogin(user, r);
+      } catch (e) { go.disabled = false; toast('连不上云端，检查一下网络', '📡'); }
+    };
+    go.onclick = submit;
+    $('#acctPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  }
+  function acctChangePass() {
+    if (!S || !S.acct) return;
+    sheet(`<h3>🔒 修改密码</h3>
+      <p class="sheet-sub">账号：${esc(S.acct)}</p>
+      <div class="form">
+        <label>当前密码</label><input id="pwOld" type="password" maxlength="32">
+        <label>新密码</label><input id="pwNew" type="password" maxlength="32" placeholder="至少 6 位">
+        <button class="btn btn-primary btn-lg" id="pwGo" style="margin-top:12px">保存新密码</button>
+      </div>`);
+    $('#pwGo').onclick = async () => {
+      const o = $('#pwOld').value, n = $('#pwNew').value;
+      if (n.length < 6) return toast('新密码至少 6 位', '🔒');
+      const c = cloudId();
+      try {
+        const r = await sbRpc('pk_change_pass', { p_uid: c.uid, p_token: c.token, p_old: o, p_new: n });
+        if (r && r.ok) { closeSheet(); toast('密码已更新，记牢它', '🔒'); }
+        else if (r && r.err === 'wrong_old') toast('当前密码不对', '⚠️');
+        else if (r && r.err === 'bad_new') toast('新密码至少 6 位', '⚠️');
+        else toast('没改成，稍后再试', '⚠️');
+      } catch (e) { toast('连不上云端，检查一下网络', '📡'); }
+    };
+  }
+  function accountSheet() {
+    if (!S || !S.acct) return openAcctLogin();
+    sheet(`<h3>🔑 我的账号</h3>
+      <p class="sheet-sub">当前账号：${esc(S.acct)} · 换手机登录这个账号就能找回记录</p>
+      <div class="sheet-actions col">
+        <button class="btn btn-primary btn-lg" id="acctPwd">修改密码</button>
+        <button class="btn btn-ghost btn-lg" id="acctOut">退出账号</button>
+      </div>`);
+    $('#acctPwd').onclick = acctChangePass;
+    $('#acctOut').onclick = () => {
+      sheet(`<h3>退出账号？</h3>
+        <p class="sheet-sub">退出后本机的打卡记录还在，可以继续用；下次登录账号即可恢复云端记录。</p>
+        <div class="sheet-actions">
+          <button class="btn btn-ghost" id="aoNo">取消</button>
+          <button class="btn btn-danger" id="aoYes">退出账号</button>
+        </div>`);
+      $('#aoNo').onclick = accountSheet;
+      $('#aoYes').onclick = () => {
+        S.acct = ''; S.cloud = null;
+        persist(); closeSheet(); render();
+        toast('已退出账号，本机记录保留', '👋');
+      };
+    };
+  }
+
   function logout() {
-    sheet(`<h3>退出当前账号？</h3><p class="sheet-sub">退出后这个微信的坚持记录会保留，重新登录即可继续。</p>
+    sheet(`<h3>退出当前账号？</h3><p class="sheet-sub">退出后这份坚持记录会保留，重新登录即可继续。</p>
       <div class="sheet-actions"><button class="btn btn-ghost" id="noOut">取消</button>
       <button class="btn btn-danger" id="yesOut">退出登录</button></div>`);
     $('#noOut').onclick = closeSheet;
@@ -2124,6 +2251,8 @@
     loadDB();
     $('#pekiIco').innerHTML = QuitArt.pekiAvatar();
     $('#wxLogin').addEventListener('click', openWxAuth);
+    const acl = $('#acctLogin');
+    if (acl) acl.addEventListener('click', () => openAcctLogin());
     $$('.tab').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.tab; render(); window.scrollTo(0, 0); }));
     $('#nickBtn').addEventListener('click', openNickEdit);
     /* 佩奇社区进入按钮（三个群各自独立，事件委托） */
@@ -2140,6 +2269,7 @@
           ${isAndroid ? `<button class="menu-row" id="mApk"><span>📥</span><div><b>下载安卓 App</b><small>安装包下载到手机，装好就是原生应用</small></div></button>` : ''}
           <button class="menu-row" id="mShare"><span>🔗</span><div><b>分享链接</b><small>复制网页链接或安装包链接</small></div></button>
           <button class="menu-row" id="mVip"><span>🎫</span><div><b>会员中心</b><small>${vipOn() ? '已开通 · 还剩 ' + vipLeftDays() + ' 天' : '输入激活码开通'}</small></div></button>
+          <button class="menu-row" id="mAccount"><span>🔑</span><div><b>${S.acct ? '我的账号' : '账号密码登录'}</b><small>${S.acct ? esc(S.acct) + ' · 换手机可找回记录' : '登录后换手机也能找回打卡记录'}</small></div></button>
           <button class="menu-row" id="mService"><span>💬</span><div><b>联系客服</b><small>加微信，问题随时找我</small></div></button>
           <button class="menu-row danger" id="mLogout"><span>🚪</span><div><b>退出登录</b><small>记录会保留，可重新登录</small></div></button>
         </div>`);
@@ -2147,6 +2277,7 @@
       if (ma) ma.onclick = downloadApk;
       $('#mShare').onclick = shareSheet;
       $('#mVip').onclick = vipSheet;
+      $('#mAccount').onclick = () => { if (S.acct) accountSheet(); else openAcctLogin(); };
       $('#mFriends').onclick = friendsSheet;
       $('#mService').onclick = serviceSheet;
       $('#mLogout').onclick = logout;
