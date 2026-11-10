@@ -194,6 +194,29 @@ h3 small { font-weight: 400; }
 .food-row em.on { font-size: 10px; padding: 1px 6px; }
 .clock-presets { display: flex; gap: 8px; margin-top: 8px; }
 .clock-presets .btn { flex: 1; margin: 0; }
+
+/* ===== 小闹钟：自绘选择器（网页 / 安卓 App / iOS 三端同一套）===== */
+.ck-sum {
+  text-align: center; font-size: 15px; font-weight: 700; padding: 10px 8px; border-radius: 14px;
+  background: rgba(124, 92, 255, .16); border: 1px solid rgba(124, 92, 255, .35);
+  font-variant-numeric: tabular-nums;
+}
+.clock-presets { margin-top: 10px; }
+.ck-label { font-size: 12.5px; color: var(--muted); margin: 14px 0 6px; }
+.ck-cal .cal-cell { padding: 7px 0; font-size: 12.5px; cursor: pointer; }
+.ck-cal .cal-cell.dis { cursor: default; }
+.ck-time { display: flex; gap: 10px; }
+.ck-step {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px;
+  background: rgba(255, 255, 255, .04); border: 1px solid var(--line); border-radius: 14px; padding: 8px 4px;
+}
+.ck-step button {
+  width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line); flex: none;
+  background: rgba(255, 255, 255, .07); color: var(--text); font-size: 17px; line-height: 1; display: grid; place-items: center;
+}
+.ck-step button:active { background: rgba(124, 92, 255, .35); }
+.ck-step b { min-width: 30px; text-align: center; font-size: 17px; font-variant-numeric: tabular-nums; }
+.ck-unit { font-size: 11.5px; color: var(--muted); }
 @keyframes tailWag { 0%,100% { transform: rotate(-10deg); } 50% { transform: rotate(16deg); } }
 .dog-tail { animation: tailWag 1s ease-in-out infinite; transform-box: fill-box; transform-origin: 100% 100%; }
 @keyframes dogWiggle { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-9deg); } 50% { transform: rotate(7deg); } 75% { transform: rotate(-4deg); } }
