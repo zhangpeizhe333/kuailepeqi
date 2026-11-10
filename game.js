@@ -185,7 +185,7 @@
     const a = DB.accounts[id];
     if (!a) return openWxAuth();
     sheet(`<h3>删除这条登录记录？</h3>
-      <p class="sheet-sub">「${esc(a.nickname || '玩家')}」的打卡记录、积分、小纸条都会被删除，无法恢复。<br>云端好友资料也会一起清除，好友将搜不到这个账号。</p>
+      <p class="sheet-sub">「${esc(a.nickname || '玩家')}」的打卡记录、积分、小纸条都会被删除，无法恢复。<br>云端资料和群成员身份一起清除，好友和群里都搜不到；和别人发过的私聊内容会保留。</p>
       <div class="sheet-actions">
         <button class="btn btn-ghost" id="delNo">取消</button>
         <button class="btn btn-danger" id="delYes">删除记录</button>
@@ -2238,6 +2238,7 @@
         const blocked = new Set((blocks || []).map((b) => b.blocked_uid));
         if (!members || !members.length) { mpanel.innerHTML = '<p class="muted tiny" style="text-align:center;padding:20px 0">社区里还没有人</p>'; return; }
         mpanel.innerHTML = `<div class="cm-top"><b>社区成员（${members.length}）</b><button id="cmClose">收起</button></div>` +
+          '<p class="muted tiny" style="text-align:center;margin:0 0 8px">3 天不进群会自动移出，再进一次就能回来</p>' +
           members.map((m) => {
             const me = m.uid === c.uid;
             const isBlocked = blocked.has(m.uid);
