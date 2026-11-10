@@ -17,7 +17,8 @@
   }
 
   const DB_KEY = 'quitwalk_accounts_v1';
-  const AVATARS = ['🐣', '🐰', '🐻', '🦊', '🐼', '🐨', '🐯', '🦁', '🐮', '🐸'];
+  /* 可选聊天头像（会员可自选，其它人随机分配） */
+  const AVATARS = ['🐣', '🐰', '🐻', '🦊', '🐼', '🐨', '🐯', '🦁', '🐮', '🐸', '🐷', '🐵', '🐶', '🐱', '🦄', '🐧'];
 
   let DB = null;
   let S = null;
@@ -36,6 +37,7 @@
       wx: null, nickname: '', gender: 'boy', age: '', signature: '无语中..', avatar: '🐣',
       smoke: null, alcohol: null, fit: null,
       points: 0, pointsToday: { d: '', n: 0 }, teaseToday: { d: '', n: 0 }, notes: [], msgs: [], pekiCheer: 0,
+      makeup: { smoke: [], alcohol: [], fit: [] },
       vip: { until: 0 }, vipFree: { d: '', used: false }, cloud: null, acct: '',
       peki: { charm: 0, lastFeed: 0, lastTease: 0, ghostUntil: 0, bigUntil: 0, girlUntil: 0, ptUntil: 0, dead: false },
       clock: { target: 0 },
@@ -45,6 +47,9 @@
   function fixSave(s) {
     const f = freshSave();
     for (const k of Object.keys(f)) if (s[k] === undefined) s[k] = f[k];
+    /* 补签记录：老存档可能没有，补齐三个模块的数组 */
+    if (!s.makeup || typeof s.makeup !== 'object') s.makeup = { smoke: [], alcohol: [], fit: [] };
+    for (const k of ['smoke', 'alcohol', 'fit']) if (!Array.isArray(s.makeup[k])) s.makeup[k] = [];
     /* 打卡日历历史：老存档补 days 数组（把最近打卡日算进去） */
     for (const k of ['smoke', 'alcohol', 'fit']) {
       const m = s[k];
@@ -1327,11 +1332,9 @@
       for (let i = 0; i < minis; i++) {
         actors += `<g transform="translate(${miniPos[i][0]} ${miniPos[i][1]})"><g class="peki-float" style="animation-delay:-${(i * 1.1).toFixed(1)}s"><g class="pk-tap mini-tap" data-who="mini" data-i="${i}">${QuitArt.pekiHead(0.82, sleepy, MINI_HAIR[i])}</g></g></g>`;
       }
-      if (dogOn) {
-        actors += `<g class="dog-actor" transform="translate(168 498) scale(1.5)"><g>${QuitArt.dog()}</g></g>`;
-        /* VIP：小黄狗旁边多一只小白狗 */
-        if (vip) actors += `<g class="dog-actor dog-white" transform="translate(292 512) scale(1.22)"><g>${QuitArt.dog('#f8f5ec', '#c8bfae')}</g></g>`;
-      }
+      /* VIP：小白狗在小黄狗左边，同一排；小黄狗没出现时小白狗也一直在 */
+      if (vip) actors += `<g class="dog-actor dog-white" transform="translate(146 498) scale(1.2)"><g>${QuitArt.dog('#f8f5ec', '#c8bfae')}</g></g>`;
+      if (dogOn) actors += `<g class="dog-actor" transform="translate(236 498) scale(1.5)"><g>${QuitArt.dog()}</g></g>`;
     }
 
     $('#main').innerHTML = `
@@ -1701,29 +1704,42 @@
   let startCal = null;
   function vipStartSheet() {
     if (!vipOn()) return toast('这是会员功能，先去开通会员吧', '🎫');
+    /* 只要建过项目（cfg 存在）就能设开始时间，哪怕还没打过卡 */
     const rows = [['smoke', '🚬 戒烟', S.smoke], ['alcohol', '🍺 戒酒', S.alcohol], ['fit', '🏃 运动', S.fit]]
-      .filter(([, , m]) => m && m.cfg && m.cfg.started);
-    if (!rows.length) return toast('还没有开始的项目，先打卡一次再改', '📅');
-    startCal = { mod: rows[0][0], y: new Date().getFullYear(), mo: new Date().getMonth(), sel: new Set() };
+      .filter(([, , m]) => m && m.cfg);
+    if (!rows.length) return toast('还没有开始的项目，先填一下资料再来设开始时间', '📅');
+    const m0 = S[rows[0][0]];
+    const d0 = m0.cfg.started ? new Date(m0.cfg.started) : new Date();
+    startCal = { mod: rows[0][0], y: d0.getFullYear(), mo: d0.getMonth(), sel: new Set() };
     renderStartCal();
   }
   function renderStartCal() {
-    const rows = [['smoke', '🚬 戒烟'], ['alcohol', '🍺 戒酒'], ['fit', '🏃 运动']].filter(([k]) => S[k] && S[k].cfg && S[k].cfg.started);
+    const rows = [['smoke', '🚬 戒烟'], ['alcohol', '🍺 戒酒'], ['fit', '🏃 运动']].filter(([k]) => S[k] && S[k].cfg);
     const st = startCal;
     const m = S[st.mod];
-    const d = new Date(m.cfg.started);
-    const cur = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    const d = m.cfg.started ? new Date(m.cfg.started) : null;
+    const cur = d ? `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` : '';
     sheet(`<h3>📅 打卡开始时间</h3>
       <p class="sheet-sub">选哪天，就从哪天开始算天数（网页、手机版式一致）</p>
       <div class="cal-tabs">${rows.map(([k, nm]) => `<button class="cal-tab ${k === st.mod ? 'on' : ''}" data-ct="${k}">${nm}</button>`).join('')}</div>
-      ${calHtml(st.mod, st, false)}
-      <p class="cal-hint">当前开始：${cur} · 今天之前的日期可选</p>
+      ${calHtml(st.mod, st, false, 'start')}
+      <p class="cal-hint">${cur ? `当前开始：${cur} · 可以往前改` : '还没开始计时 · 选一天就从那天开始算'}</p>
       <div class="sheet-actions col" style="margin-top:10px">
         <button class="btn btn-primary btn-lg" id="stSave">保存</button>
         <button class="btn btn-ghost btn-lg" id="stCancel">取消</button>
       </div>`);
-    $$('.cal-tab').forEach((b) => { b.onclick = () => { startCal.mod = b.dataset.ct; startCal.sel.clear(); renderStartCal(); }; });
-    bindCal(st, renderStartCal, false);
+    $$('.cal-tab').forEach((b) => {
+      b.onclick = () => {
+        startCal.mod = b.dataset.ct;
+        startCal.sel.clear();
+        const mb = S[startCal.mod];
+        const db = mb.cfg.started ? new Date(mb.cfg.started) : new Date();
+        startCal.y = db.getFullYear();
+        startCal.mo = db.getMonth();
+        renderStartCal();
+      };
+    });
+    bindCal(st, renderStartCal, false, 'start');
     $('#stCancel').onclick = closeSheet;
     $('#stSave').onclick = () => {
       if (!st.sel.size) return toast('先在日历上选一天', '📅');
@@ -1733,7 +1749,7 @@
       if (t > Date.now()) return toast('不能选以后的日子', '📅');
       m.cfg.started = t;
       /* 开始日期变了，之前补签里早于新开始日的记录退回去 */
-      const mk = S.makeup[st.mod] || [];
+      const mk = (S.makeup && S.makeup[st.mod]) || [];
       const back = mk.filter((x) => new Date(x + 'T00:00:00').getTime() < t);
       if (back.length) {
         S.makeup[st.mod] = mk.filter((x) => !back.includes(x));
@@ -1792,15 +1808,16 @@
   }
 
   /* 日历渲染 + 交互绑定（startT/makeup/days 决定格子状态） */
-  function calHtml(mod, st, multi) {
+  function calHtml(mod, st, multi, mode) {
     const m = S[mod];
+    const startMode = mode === 'start';               // 设置开始时间：今天以前都能选
     const startT = m.cfg.started ? new Date(m.cfg.started).setHours(0, 0, 0, 0) : Infinity;
-    const doneSet = new Set([...(m.days || []), ...(S.makeup[mod] || []), m.lastDate].filter(Boolean));
+    const doneSet = new Set([...(m.days || []), ...((S.makeup && S.makeup[mod]) || []), m.lastDate].filter(Boolean));
     const y = st.y, mo = st.mo;
     const firstW = new Date(y, mo, 1).getDay();
     const dim = new Date(y, mo + 1, 0).getDate();
     const nowD = new Date(); const todayS = todayStr();
-    const minT = Math.min(startT, nowD.getTime());
+    const minT = startMode ? nowD.getTime() : Math.min(startT, nowD.getTime());
     const minY = new Date(minT).getFullYear(), minMo = new Date(minT).getMonth();
     let cells = CAL_W.map((w) => `<i class="cal-cell cal-w">${w}</i>`).join('');
     for (let i = 0; i < firstW; i++) cells += '<i class="cal-cell empty"></i>';
@@ -1809,12 +1826,15 @@
       const t = new Date(y, mo, d).getTime();
       let cls = 'cal-cell';
       if (doneSet.has(ds)) cls += ' done';
-      else if (t < startT || t > Date.now()) cls += ' dis';
+      else if (t > Date.now()) cls += ' dis';
+      else if (!startMode && t < startT) cls += ' dis';
       else cls += ' miss';
       if (st.sel.has(ds)) cls += ' sel';
       cells += `<i class="${cls}" data-d="${ds}">${d}</i>`;
     }
-    const canPrev = y > minY || (y === minY && mo > minMo);
+    /* 设置开始时间可以一直往前翻 3 年；补签只能翻到开始日所在月 */
+    const floorY = nowD.getFullYear() - 3;
+    const canPrev = startMode ? (y > floorY || (y === floorY && mo > 0)) : (y > minY || (y === minY && mo > minMo));
     const canNext = y < nowD.getFullYear() || (y === nowD.getFullYear() && mo < nowD.getMonth());
     return `<div class="cal-box" data-multi="${multi ? 1 : 0}">
       <div class="cal-head">
@@ -1825,7 +1845,7 @@
       <div class="cal-grid">${cells}</div>
     </div>`;
   }
-  function bindCal(st, rerender, multi) {
+  function bindCal(st, rerender, multi, mode) {
     $$('.cal-nav').forEach((b) => {
       b.onclick = () => {
         st.mo += parseInt(b.dataset.cnav, 10);
@@ -1840,7 +1860,7 @@
         const done = el.classList.contains('done');
         const dis = el.classList.contains('dis');
         if (dis) return toast('这个日期选不了', '🗓️');
-        if (done) return toast('这一天已经打过卡啦', '✅');
+        if (done && mode !== 'start') return toast('这一天已经打过卡啦', '✅');
         if (multi) {
           if (st.sel.has(ds)) { st.sel.delete(ds); el.classList.remove('sel'); }
           else { st.sel.add(ds); el.classList.add('sel'); }
@@ -1898,7 +1918,7 @@
       p_gender: S.gender === 'girl' ? 'girl' : 'boy', p_vip: vipOn(),
     });
   }
-  /* VIP 专属小花：消息体用固定标记，收到的一方渲染成小花 */
+  /* VIP 专属红心：消息体沿用旧标记 [[FLOWER]]，历史消息同样显示成红心 */
   const FLOWER = '[[FLOWER]]';
   const genderMark = (g) => g === 'girl' ? '<i class="g-mark g-girl">♀</i>' : g === 'boy' ? '<i class="g-mark g-boy">♂</i>' : '';
   const nameHtml = (p, cls) => `<b class="${cls || ''}${p.vip ? ' vip-name' : ''}">${esc(p.nickname)}${p.vip ? ' <span class="vip-mini">VIP</span>' : ''}</b>`;
@@ -1918,7 +1938,7 @@
       </div>
       <div class="chat-body" id="dmBody"><p class="muted tiny" style="text-align:center">加载中…</p></div>
       <div class="chat-input">
-        ${vipOn() ? '<button class="flower-btn" id="dmFlower" title="送一朵专属小花">🌸</button>' : ''}
+        ${vipOn() ? '<button class="heart-btn" id="dmFlower" title="送一颗专属红心">❤️</button>' : ''}
         <input id="dmText" maxlength="200" placeholder="说点什么…" autocomplete="off">
         <button id="dmSend">发送</button>
       </div>`;
@@ -1936,7 +1956,7 @@
         dmMarkRead(peer.uid, lastId);
         const myUid = c.uid;
         if (prevId > 0 && msgs.some((m) => m.sender !== myUid && m.body === FLOWER && m.mid > prevId)) {
-          toast('收到一朵专属小花', '🌸');
+          toast('收到一颗专属红心', '❤️');
         }
         body.innerHTML = msgs.map((m) => {
           const mine = m.sender === myUid;
@@ -1945,7 +1965,7 @@
           return `
           <div class="chat-msg ${mine ? 'mine' : ''}">
             ${mine ? '' : `<span class="chat-ava">${esc(peer.avatar || '🐣')}</span>`}
-            <div class="chat-bub ${mine ? '' : 'them'}${isFlower ? ' flower-bub' : ''}${isVip && !isFlower ? ' vip-text' : ''}">${isFlower ? '<span class="fx-flower">🌸</span>' : `<b>${esc(m.body)}</b>`}</div>
+            <div class="chat-bub ${mine ? '' : 'them'}${isFlower ? ' heart-bub' : ''}${isVip && !isFlower ? ' vip-text' : ''}">${isFlower ? '<span class="fx-heart">❤️</span>' : `<b>${esc(m.body)}</b>`}</div>
           </div>`;
         }).join('');
         body.scrollTop = body.scrollHeight;
@@ -1977,7 +1997,7 @@
       fb.disabled = true;
       try {
         const r = await sbRpc('pk_dm_send', { p_uid: c.uid, p_token: c.token, p_to: peer.uid, p_body: FLOWER });
-        if (r && r.ok) { toast('专属小花已送出', '🌸'); load(); }
+        if (r && r.ok) { toast('专属红心已送出', '❤️'); load(); }
         else if (r && r.err === 'blocked') toast('你已被对方拉黑，送不出去', '🚫');
         else toast('没送出去，再试一次', '⚠️');
       } catch (err) { toast('网络不太顺，再试一次', '📡'); }
@@ -2205,7 +2225,7 @@
       </div>
       <div class="comm-members hidden" id="commMembers"></div>
       <div class="chat-input">
-        ${vipOn() ? '<button class="flower-btn" id="commFlower" title="送一朵专属小花">🌸</button>' : ''}
+        ${vipOn() ? '<button class="heart-btn" id="commFlower" title="送一颗专属红心">❤️</button>' : ''}
         <input id="commText" maxlength="200" placeholder="和大家聊聊今天的坚持…" autocomplete="off">
         <button id="commSend">发送</button>
       </div>`;
@@ -2238,12 +2258,12 @@
         const who = mine ? { nickname: S.nickname || '我', avatar: S.avatar || '🐣', gender: S.gender, vip: vipOn() } : m;
         const isFlower = m.body === FLOWER;
         const isVip = mine ? vipOn() : !!m.vip;
-        if (isFlower && !mine && !firstBatch) toast(`${m.nickname || '有人'} 送了一朵专属小花`, '🌸');
+        if (isFlower && !mine && !firstBatch) toast(`${m.nickname || '有人'} 送了一颗专属红心`, '❤️');
         html += `<div class="chat-msg ${mine ? 'mine' : ''}">
           <span class="chat-ava">${esc2(who.avatar || '🐣')}</span>
           <div class="msg-col">
             <div class="chat-who ${mine ? 'r' : ''}">${nameHtml(who)}${genderMark(who.gender)}</div>
-            <div class="chat-bub ${mine ? 'mine-bub' : 'them'}${isFlower ? ' flower-bub' : ''}${isVip && !isFlower ? ' vip-text' : ''}">${isFlower ? '<span class="fx-flower">🌸</span>' : esc2(m.body)}</div>
+            <div class="chat-bub ${mine ? 'mine-bub' : 'them'}${isFlower ? ' heart-bub' : ''}${isVip && !isFlower ? ' vip-text' : ''}">${isFlower ? '<span class="fx-heart">❤️</span>' : esc2(m.body)}</div>
           </div>
         </div>`;
       }
@@ -2359,11 +2379,11 @@
       cf.disabled = true;
       try {
         const r = await sbRpc('pk_chat_send', { p_uid: c.uid, p_token: c.token, p_module: mod, p_body: FLOWER });
-        if (r && r.ok) { toast('专属小花已送出，群里都看得到', '🌸'); load(); }
+        if (r && r.ok) { toast('专属红心已送出，群里都看得到', '❤️'); load(); }
         else if (r && r.err === 'not_member') {
           await sbRpc('pk_join_community', { p_uid: c.uid, p_token: c.token, p_module: mod });
           const r2 = await sbRpc('pk_chat_send', { p_uid: c.uid, p_token: c.token, p_module: mod, p_body: FLOWER });
-          if (r2 && r2.ok) { toast('专属小花已送出，群里都看得到', '🌸'); load(); }
+          if (r2 && r2.ok) { toast('专属红心已送出，群里都看得到', '❤️'); load(); }
           else toast('没送出去，再试一次', '⚠️');
         }
         else toast('没送出去，再试一次', '⚠️');
@@ -2440,17 +2460,38 @@
 
   function openNickEdit() {
     if (!S) return;
+    const vip = vipOn();
+    let pickAva = S.avatar || '🐣';
     sheet(`<h3>✏️ 修改昵称</h3>
       <p class="sheet-sub">昵称会显示在顶栏标题旁边，随时可以再改</p>
       <div class="form"><label>昵称</label>
         <input id="nickInput" maxlength="12" value="${esc(S.nickname || '')}" placeholder="给自己起个名字"></div>
-      <button class="btn btn-primary btn-lg" id="nickSave" style="margin-top:14px">保存昵称</button>`);
+      <div class="ava-pick">
+        <div class="ava-pick-head"><b>聊天头像</b>${vip ? '<span class="vip-mini">VIP</span>' : '<span class="ava-lock">会员可自定义</span>'}</div>
+        ${vip
+          ? `<div class="ava-grid" id="avaGrid">${AVATARS.map((a) => `<button class="ava-opt${a === pickAva ? ' on' : ''}" data-a="${a}">${a}</button>`).join('')}</div>`
+          : `<div class="ava-lock-row"><span class="ava-opt on">${esc(pickAva)}</span><p>开通会员后，可在这里自己挑聊天头像</p><button id="avaVip">去开通</button></div>`}
+      </div>
+      <button class="btn btn-primary btn-lg" id="nickSave" style="margin-top:14px">保存</button>`);
     const inp = $('#nickInput');
     setTimeout(() => { inp.focus(); inp.select(); }, 60);
+    if (vip) {
+      $$('#avaGrid .ava-opt').forEach((b) => {
+        b.onclick = () => {
+          pickAva = b.dataset.a;
+          $$('#avaGrid .ava-opt').forEach((x) => x.classList.toggle('on', x === b));
+        };
+      });
+    } else {
+      const lk = $('#avaVip');
+      if (lk) lk.onclick = () => { closeSheet(); setTimeout(vipSheet, 240); };
+    }
     $('#nickSave').onclick = () => {
       const v = inp.value.trim();
       if (!v) return toast('昵称不能为空', '✏️');
+      const avaChanged = vip && pickAva !== (S.avatar || '🐣');
       S.nickname = v;
+      if (vip) S.avatar = pickAva;
       persist();
       closeSheet();
       const nb2 = $('#nickBtn');
@@ -2458,7 +2499,9 @@
         nb2.innerHTML = `<span class="nk-t">${esc(S.nickname || '未命名')}</span>` + (vipOn() ? ' <span class="vip-mini">VIP</span>' : '');
         nb2.classList.toggle('vip-name', vipOn());
       }
-      toast('昵称已更新', '✏️');
+      /* 头像/昵称同步到云端，好友和群里立刻看到新头像 */
+      sbSync().catch(() => {});
+      toast(avaChanged ? '昵称和头像已更新' : '昵称已更新', '✏️');
     };
   }
 
