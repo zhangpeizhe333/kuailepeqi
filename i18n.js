@@ -235,6 +235,7 @@
     '退出当前账号？': 'Log out of this account?',
     '退出后这份坚持记录会保留，重新登录即可继续。': 'Your streak stays saved; log back in to continue.',
     '📥 下载安卓 App': '📥 Android App',
+    '下载安卓 App': 'Android App',
     '微信里不能直接下载安装包，需要先换到浏览器': "APKs can't download inside WeChat — switch to a browser",
     '点右上角「···」': 'Tap "···" in the top right',
     '选择「在浏览器中打开」': 'Choose "Open in browser"',
@@ -525,7 +526,7 @@
     [/^(.+) · 换手机可找回记录$/, '$1 · log in anywhere to recover'],
     [/^已拉黑 (.+)，不再收到TA的私信$/, "Blocked $1 — their DMs won't reach you"],
     [/^已取消拉黑 (.+)$/, 'Unblocked $1'],
-    [/^已退出(.+)，下次随时再进$/, 'Left $1 — come back anytime'],
+    [/^已退出(.+)，下次随时再进$/, function (m, p1) { var g = tr(p1); return 'Left ' + (g || p1) + ' — come back anytime'; }],
     [/^重新开始(戒烟|戒酒|运动)？$/, function (m, x) { return 'Restart ' + ({ '戒烟': 'quitting', '戒酒': 'sober run', '运动': 'workouts' }[x]) + '?'; }],
     [/^已重新开始(戒烟|戒酒|运动)$/, function (m, x) { return 'Restarted ' + ({ '戒烟': 'quitting', '戒酒': 'sober run', '运动': 'workouts' }[x]); }],
     [/^会清空(戒烟|戒酒|运动)的全部打卡记录和开始时间，不能撤销。$/, function (m, x) { return "This erases all of your " + ({ '戒烟': 'smoke-free', '戒酒': 'sober', '运动': 'workout' }[x]) + " check-ins and start date. It can't be undone."; }],
@@ -543,6 +544,15 @@
     [/^(\d+) · 生效中$/, 'Plan $1 · active'],
     [/^· 魅力 (\d+)$/, '· Charm $1'],
     [/^🚬 (\d+) 天 · 🍺 (\d+) 天 · 🏃 (\d+) 天$/, '🚬 $1d · 🍺 $2d · 🏃 $3d'],
+    [/^((?:🚬|🍺|🏃) \d+ 天)(　(?:🚬|🍺|🏃) \d+ 天)*$/, function (m) {
+      var parts = m.split('　'), out = [];
+      for (var i = 0; i < parts.length; i++) {
+        var mm = parts[i].match(/^((?:🚬|🍺|🏃)) (\d+) 天$/);
+        if (!mm) return m; /* 结构不符则原样返回，避免 replace 输出 "null" */
+        out.push(mm[1] + ' ' + mm[2] + 'd');
+      }
+      return out.join('　');
+    }],
     [/^🚬 (\d+) 天　🍺 (\d+) 天　🏃 (\d+) 天$/, '🚬 $1d · 🍺 $2d · 🏃 $3d'],
     [/^🚬 (\d+) 天　🏃 (\d+) 天$/, '🚬 $1d · 🏃 $2d'],
     [/^(\d+) 天后$/, 'in $1 days'],
@@ -622,12 +632,16 @@
       if (p.classList && p.classList.contains('cal-w') && WD_MAP[core]) { n.nodeValue = WD_MAP[core]; continue; }
       var t = tr(core);
       if (!t) {
-        /* toast 等场景文本是「emoji + 内容」合在一个节点里（如 🌞 呀，你回来啦～），
-           首段是纯符号/emoji 时剥离再查词典，翻译回填保留原前缀 */
-        var m2 = core.match(/^([^A-Za-z0-9\u4e00-\u9fff]+)\s+(.+)$/);
-        if (m2) {
-          var t2 = tr(m2[2]);
-          if (t2) { n.nodeValue = n.nodeValue.replace(m2[2], t2); continue; }
+        /* toast 等场景文本是「emoji + 内容 (+ ⭐+1)」合在一个节点里（如 🌞 呀，你回来啦～、💃 佩奇跳起了小舞～ ⭐+1），
+           先剥尾部加分后缀，再剥首段纯符号/emoji 前缀，分别查词典后按原样拼回 */
+        var tail = '', base = core;
+        var ms = base.match(/\s*⭐\+1$/);
+        if (ms) { tail = ms[0]; base = base.slice(0, base.length - tail.length); }
+        var m2 = base.match(/^([^A-Za-z0-9\u4e00-\u9fff]+)\s+(.+)$/);
+        var t2 = m2 ? tr(m2[2]) : tr(base);
+        if (t2) {
+          n.nodeValue = n.nodeValue.replace(core, (m2 ? m2[1] + ' ' : '') + t2 + tail);
+          continue;
         }
       }
       if (t && t !== core) n.nodeValue = n.nodeValue.replace(core, t);
@@ -638,6 +652,8 @@
     var els = root.querySelectorAll ? root.querySelectorAll('input,textarea,button,[title],[aria-label]') : [];
     for (var i = 0; i < els.length; i++) {
       var el = els[i];
+      /* 基本信息编辑框里的默认个性签名（input 的 value 属性不走文本遍历） */
+      if ((el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && el.value === '无语中..') el.value = 'Speechless..';
       var as = ['placeholder', 'title', 'aria-label'];
       for (var j = 0; j < as.length; j++) {
         var v = el.getAttribute && el.getAttribute(as[j]);
@@ -678,7 +694,8 @@
     var tb = document.querySelector('.tb-wrap');
     if (tb) {
       tb.classList.add('tb-en');
-      if (tb.firstChild && tb.firstChild.nodeType === 3) tb.firstChild.nodeValue = NAME;
+      /* 英文顶栏分三行：Quit / Smoke & Drink / With Me，窄屏也放得下 */
+      tb.innerHTML = 'Quit<br>Smoke &amp; Drink<br>With Me';
     }
     var credit = document.querySelector('.brand-credit');
     if (credit) credit.style.display = 'none';
@@ -698,8 +715,8 @@
     var cur = LANG === 'en' ? 'English' : '中文';
     sheetFn('<h3>🌐 Language / 语言</h3><p class="sheet-sub">Current: ' + cur + '</p>' +
       '<div class="sheet-actions col">' +
-      '<button class="btn btn-primary btn-lg' + (LANG === 'en' ? ' lang-on' : '') + '" id="lgEn">🇺🇸 English</button>' +
-      '<button class="btn btn-primary btn-lg' + (LANG === 'zh' ? ' lang-on' : '') + '" id="lgZh">🇨🇳 中文</button>' +
+      '<button class="btn btn-primary btn-lg' + (LANG === 'en' ? ' lang-on' : '') + '" id="lgEn">English</button>' +
+      '<button class="btn btn-primary btn-lg' + (LANG === 'zh' ? ' lang-on' : '') + '" id="lgZh">中文</button>' +
       '</div>');
     document.getElementById('lgEn').onclick = function () { setLang('en'); };
     document.getElementById('lgZh').onclick = function () { setLang('zh'); };
