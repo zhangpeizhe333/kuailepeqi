@@ -408,6 +408,7 @@
   function sceneK(mod) {
     const hairC = S.gender === 'boy' ? '#3d3244' : '#5a3d3d';
     const shirt = mod === 'smoke' ? '#8fd6b8' : mod === 'alcohol' ? '#f0b48c' : '#9fc4ff';
+    const vip = vipOn();
     if (mod === 'fit') {
       const c = S.fit && S.fit.cfg;
       let body = 'normal';
@@ -415,12 +416,12 @@
         const bmi = c.w / Math.pow(c.h / 100, 2);
         body = bmi > 23.9 ? 'fat' : bmi < 18.5 ? 'thin' : 'normal';
       }
-      return { gender: S.gender, stage: 2, body, hairC, shirt };
+      return { gender: S.gender, stage: 2, body, hairC, shirt, vip };
     }
     const m = S[mod];
     const years = m.cfg.years;
     const stage = QuitArt.stageOf(years, m.total || 0);
-    return { gender: S.gender, stage, hairC, shirt, iv: mod === 'alcohol' && years > 10 && (m.total || 0) < 5 };
+    return { gender: S.gender, stage, hairC, shirt, vip, iv: mod === 'alcohol' && years > 10 && (m.total || 0) < 5 };
   }
   function isDay() {
     const f = localStorage.getItem('quitwalk_force_period');
@@ -1245,6 +1246,21 @@
     });
   }
 
+  /* VIP：围绕角色一圈的小星星（一闪一闪） */
+  function vipStars(scale, seed, n) {
+    const r = 92 * (scale / 1.75);
+    let out = '<g class="vip-stars">';
+    for (let i = 0; i < n; i++) {
+      const a = (Math.PI * 2 / n) * i + seed;
+      const rr = r * (0.86 + 0.26 * ((i * 37) % 11) / 10);
+      const x = Math.cos(a) * rr * 1.12;
+      const y = Math.sin(a) * rr * 0.9 - 4;
+      const s = (0.7 + 0.5 * (((i * 53) % 7) / 6)).toFixed(2);
+      out += `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${s})"><path class="vip-star" style="animation-delay:-${(i * 0.31).toFixed(2)}s" d="M0 -7 L1.7 -1.7 L7 0 L1.7 1.7 L0 7 L-1.7 1.7 L-7 0 L-1.7 -1.7 Z" fill="#ffe9a8"/></g>`;
+    }
+    return out + '</g>';
+  }
+
   function renderPeki() {
     const got = noteUniq().length;
     const todayN = todayPoints();
@@ -1278,6 +1294,7 @@
     if (dead) {
       actors = QuitArt.grave();
     } else {
+      const vip = vipOn();
       const tub = bathing ? QuitArt.bath(girlOn ? 412 : 400, girlOn ? (big ? 210 : 198) : (big ? 164 : 150)) : null;
       const px = girlOn ? 328 : 400;
       if (tub) actors += tub.back;
@@ -1285,11 +1302,11 @@
         /* 女孩先画：马尾垂在佩奇脸后面，不会挡住佩奇 */
         actors += `<g transform="translate(508 300)"><g class="peki-float" style="animation-delay:-1.4s">
           <g class="pk-tap" data-who="girl">${QuitArt.girlHead(gs, sleepy)}</g>
-        </g></g>`;
+        </g>${vip ? vipStars(gs, 0.7, 10) : ''}</g>`;
       }
       actors += `<g transform="translate(${px} 300)"><g class="peki-float">
           <g class="kid-anim peki-kid pk-tap" data-who="peki">${QuitArt.pekiHead(ps, sleepy)}</g>
-        </g></g>`;
+        </g>${vip ? vipStars(ps, 0.15, 12) : ''}</g>`;
       if (sleepy) {
         const zf = ps / 1.75;
         actors += `<g transform="translate(${(px - 88 * zf).toFixed(0)} ${(300 - 92 * zf).toFixed(0)})">
@@ -1310,7 +1327,11 @@
       for (let i = 0; i < minis; i++) {
         actors += `<g transform="translate(${miniPos[i][0]} ${miniPos[i][1]})"><g class="peki-float" style="animation-delay:-${(i * 1.1).toFixed(1)}s"><g class="pk-tap mini-tap" data-who="mini" data-i="${i}">${QuitArt.pekiHead(0.82, sleepy, MINI_HAIR[i])}</g></g></g>`;
       }
-      if (dogOn) actors += `<g class="dog-actor" transform="translate(168 498) scale(1.5)"><g>${QuitArt.dog()}</g></g>`;
+      if (dogOn) {
+        actors += `<g class="dog-actor" transform="translate(168 498) scale(1.5)"><g>${QuitArt.dog()}</g></g>`;
+        /* VIP：小黄狗旁边多一只小白狗 */
+        if (vip) actors += `<g class="dog-actor dog-white" transform="translate(292 512) scale(1.22)"><g>${QuitArt.dog('#f8f5ec', '#c8bfae')}</g></g>`;
+      }
     }
 
     $('#main').innerHTML = `
@@ -1891,6 +1912,8 @@
       p_gender: S.gender === 'girl' ? 'girl' : 'boy', p_vip: vipOn(),
     });
   }
+  /* VIP 专属小花：消息体用固定标记，收到的一方渲染成小花 */
+  const FLOWER = '[[FLOWER]]';
   const genderMark = (g) => g === 'girl' ? '<i class="g-mark g-girl">♀</i>' : g === 'boy' ? '<i class="g-mark g-boy">♂</i>' : '';
   const nameHtml = (p, cls) => `<b class="${cls || ''}${p.vip ? ' vip-name' : ''}">${esc(p.nickname)}${p.vip ? ' <span class="vip-mini">VIP</span>' : ''}</b>`;
 
@@ -1909,6 +1932,7 @@
       </div>
       <div class="chat-body" id="dmBody"><p class="muted tiny" style="text-align:center">加载中…</p></div>
       <div class="chat-input">
+        ${vipOn() ? '<button class="flower-btn" id="dmFlower" title="送一朵专属小花">🌸</button>' : ''}
         <input id="dmText" maxlength="200" placeholder="说点什么…" autocomplete="off">
         <button id="dmSend">发送</button>
       </div>`;
@@ -1921,14 +1945,23 @@
         const msgs = (arr || []).slice().reverse();
         if (!msgs.length && lastId === 0) { body.innerHTML = '<p class="muted tiny" style="text-align:center;margin-top:30px">还没有聊过，打个招呼吧～</p>'; return; }
         if (msgs.length && msgs[msgs.length - 1].mid === lastId) return;
+        const prevId = lastId;
         lastId = msgs.length ? msgs[msgs.length - 1].mid : 0;
         dmMarkRead(peer.uid, lastId);
         const myUid = c.uid;
-        body.innerHTML = msgs.map((m) => `
-          <div class="chat-msg ${m.sender === myUid ? 'mine' : ''}">
-            ${m.sender === myUid ? '' : `<span class="chat-ava">${esc(peer.avatar || '🐣')}</span>`}
-            <div class="chat-bub ${m.sender === myUid ? '' : 'them'}"><b class="${peer.vip ? 'vip-text' : ''}">${esc(m.body)}</b></div>
-          </div>`).join('');
+        if (prevId > 0 && msgs.some((m) => m.sender !== myUid && m.body === FLOWER && m.mid > prevId)) {
+          toast('收到一朵专属小花', '🌸');
+        }
+        body.innerHTML = msgs.map((m) => {
+          const mine = m.sender === myUid;
+          const isFlower = m.body === FLOWER;
+          const isVip = mine ? vipOn() : !!peer.vip;
+          return `
+          <div class="chat-msg ${mine ? 'mine' : ''}">
+            ${mine ? '' : `<span class="chat-ava">${esc(peer.avatar || '🐣')}</span>`}
+            <div class="chat-bub ${mine ? '' : 'them'}${isFlower ? ' flower-bub' : ''}${isVip && !isFlower ? ' vip-text' : ''}">${isFlower ? '<span class="fx-flower">🌸</span>' : `<b>${esc(m.body)}</b>`}</div>
+          </div>`;
+        }).join('');
         body.scrollTop = body.scrollHeight;
       } catch (err) {
         body.innerHTML = '<p class="muted tiny" style="text-align:center;margin-top:30px">连不上云端，稍后再试</p>';
@@ -1952,6 +1985,18 @@
     };
     $('#dmSend').onclick = send;
     $('#dmText').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+    const fb = $('#dmFlower');
+    if (fb) fb.onclick = async () => {
+      if (fb.disabled) return;
+      fb.disabled = true;
+      try {
+        const r = await sbRpc('pk_dm_send', { p_uid: c.uid, p_token: c.token, p_to: peer.uid, p_body: FLOWER });
+        if (r && r.ok) { toast('专属小花已送出', '🌸'); load(); }
+        else if (r && r.err === 'blocked') toast('你已被对方拉黑，送不出去', '🚫');
+        else toast('没送出去，再试一次', '⚠️');
+      } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+      setTimeout(() => { fb.disabled = false; }, 1500);
+    };
   }
 
   /* 拉黑 / 取消拉黑 */
@@ -2174,6 +2219,7 @@
       </div>
       <div class="comm-members hidden" id="commMembers"></div>
       <div class="chat-input">
+        ${vipOn() ? '<button class="flower-btn" id="commFlower" title="送一朵专属小花">🌸</button>' : ''}
         <input id="commText" maxlength="200" placeholder="和大家聊聊今天的坚持…" autocomplete="off">
         <button id="commSend">发送</button>
       </div>`;
@@ -2195,6 +2241,7 @@
     if (!joined) { body.innerHTML = '<p class="muted tiny" style="text-align:center;margin-top:30px">进不去社区，稍后再试</p>'; }
 
     const esc2 = esc;
+    let firstBatch = true;
     const drawMsgs = (arr) => {
       if (!arr || !arr.length) return;
       let html = '';
@@ -2203,14 +2250,18 @@
         lastId = m.mid;
         const mine = m.uid === c.uid;
         const who = mine ? { nickname: S.nickname || '我', avatar: S.avatar || '🐣', gender: S.gender, vip: vipOn() } : m;
+        const isFlower = m.body === FLOWER;
+        const isVip = mine ? vipOn() : !!m.vip;
+        if (isFlower && !mine && !firstBatch) toast(`${m.nickname || '有人'} 送了一朵专属小花`, '🌸');
         html += `<div class="chat-msg ${mine ? 'mine' : ''}">
           <span class="chat-ava">${esc2(who.avatar || '🐣')}</span>
           <div class="msg-col">
             <div class="chat-who ${mine ? 'r' : ''}">${nameHtml(who)}${genderMark(who.gender)}</div>
-            <div class="chat-bub ${mine ? 'mine-bub' : 'them'} ${m.vip ? 'vip-text' : ''}">${esc2(m.body)}</div>
+            <div class="chat-bub ${mine ? 'mine-bub' : 'them'}${isFlower ? ' flower-bub' : ''}${isVip && !isFlower ? ' vip-text' : ''}">${isFlower ? '<span class="fx-flower">🌸</span>' : esc2(m.body)}</div>
           </div>
         </div>`;
       }
+      firstBatch = false;
       if (html) { body.insertAdjacentHTML('beforeend', html); body.scrollTop = body.scrollHeight; }
     };
     const load = async () => {
@@ -2316,6 +2367,23 @@
     };
     $('#commSend').onclick = send;
     $('#commText').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+    const cf = $('#commFlower');
+    if (cf) cf.onclick = async () => {
+      if (cf.disabled) return;
+      cf.disabled = true;
+      try {
+        const r = await sbRpc('pk_chat_send', { p_uid: c.uid, p_token: c.token, p_module: mod, p_body: FLOWER });
+        if (r && r.ok) { toast('专属小花已送出，群里都看得到', '🌸'); load(); }
+        else if (r && r.err === 'not_member') {
+          await sbRpc('pk_join_community', { p_uid: c.uid, p_token: c.token, p_module: mod });
+          const r2 = await sbRpc('pk_chat_send', { p_uid: c.uid, p_token: c.token, p_module: mod, p_body: FLOWER });
+          if (r2 && r2.ok) { toast('专属小花已送出，群里都看得到', '🌸'); load(); }
+          else toast('没送出去，再试一次', '⚠️');
+        }
+        else toast('没送出去，再试一次', '⚠️');
+      } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+      setTimeout(() => { cf.disabled = false; }, 1500);
+    };
   }
 
 
