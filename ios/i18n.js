@@ -54,6 +54,7 @@
     '🎈 玩耍': '🎈 Play',
     '💖 鼓励佩奇': '💖 Encourage',
     '🤫 跟佩奇说悄悄话': '🤫 Whisper to Perry',
+    '悄悄话最多记 5 句，先删掉一句才能再记': 'Whispers hold 5 at most — delete one before adding another',
     '悄悄告诉佩奇': 'Whisper to Perry',
     '只说给佩奇一个人听…': 'Just between you and Perry…',
     '还没有悄悄话': 'No whispers yet',
@@ -487,6 +488,21 @@
     '佩奇笑得眼睛都没了': 'Perry is all smiles!', '呀，你回来啦～': "Yay, you're back~",
     '佩奇跳进洗澡池里啦！': 'Perry jumped into the bath!',
     '想说点什么呀': 'Type something first', '佩奇记在心里了': "Perry keeps it in her heart",
+    "🌷 佩奇的神秘花园": "🌷 Perry's Secret Garden",
+    '发一条动态，7 天后自动消失，所有人进花园都看得到': 'Post here — everyone in the garden sees it, and posts vanish after 7 days',
+    '正在走进花园…': 'Walking into the garden…',
+    '还没有动态，第一条由你来发～': 'No posts yet — be the first!',
+    '和大家分享你的坚持…': 'Share your streak with everyone…',
+    '写点什么，或加张图片': 'Write something or add a photo',
+    '动态已发到花园': 'Posted to the garden',
+    '已从花园删除': 'Deleted from the garden',
+    '花园加载失败，稍后再试': "Couldn't load the garden — try later",
+    '图片已选好，点发布': 'Photo ready — tap Post',
+    '图片太大，换一张小点的': 'Photo too large — pick a smaller one',
+    '只能发图片哦': 'Images only',
+    '发得太快啦，休息一下再发': 'Too fast — take a short break first',
+    '移除图片': 'Remove photo',
+    '发一张图片': 'Add a photo',
     '佩奇已经不在了…': 'Perry is gone…', '加油，宝贝': 'Keep going, buddy',
     '胖成球的小盆友来陪你练！': 'A chubby buddy joins your workout!',
     '瘦成棍的小盆友来陪你吃！': 'A skinny buddy shows up to eat!',
@@ -544,6 +560,8 @@
     [/^已拉黑 (.+)，不再收到TA的私信$/, "Blocked $1 — their DMs won't reach you"],
     [/^已取消拉黑 (.+)$/, 'Unblocked $1'],
     [/^(.+) 送了一颗专属红心$/, function (m, p1) { var tp = tr(p1); return (tp || p1) + ' sent a VIP heart'; }],
+    [/^🤫 跟佩奇说悄悄话（(\d+)\/5）$/, '🤫 Whisper to Perry ($1/5)'],
+    [/^(\d+) 天后消失$/, '$1d left'],
     [/^已退出(.+)，下次随时再进$/, function (m, p1) { var g = tr(p1); return 'Left ' + (g || p1) + ' — come back anytime'; }],
     [/^重新开始(戒烟|戒酒|运动)？$/, function (m, x) { return 'Restart ' + ({ '戒烟': 'quitting', '戒酒': 'sober run', '运动': 'workouts' }[x]) + '?'; }],
     [/^已重新开始(戒烟|戒酒|运动)$/, function (m, x) { return 'Restarted ' + ({ '戒烟': 'quitting', '戒酒': 'sober run', '运动': 'workouts' }[x]); }],
@@ -647,7 +665,7 @@
   }
 
   /* 只跳过聊天气泡（用户输入内容）；社区的提示语（进入中/退出等）照常翻译 */
-  var SKIP_SEL = '.chat-bub,.msg-sign';
+  var SKIP_SEL = '.chat-bub,.msg-sign,.gd-text';  /* 花园动态是玩家内容，不翻译 */
 
   function walkText(root) {
     var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
