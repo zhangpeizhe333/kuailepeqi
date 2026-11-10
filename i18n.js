@@ -261,7 +261,8 @@
     '已删除该登录记录': 'Login record deleted',
     '已删除该登录记录和云端资料': 'Login record and cloud profile deleted',
     '正在清除…': 'Deleting…',
-    '云端好友资料也会一起清除，好友将搜不到这个账号。': 'Cloud profile is removed too — friends will no longer find this account.',
+    '云端资料和群成员身份一起清除，好友和群里都搜不到；和别人发过的私聊内容会保留。': 'Cloud profile and group membership are removed — gone from search and groups. Your private chats stay with the other person.',
+    '3 天不进群会自动移出，再进一次就能回来': 'No visit for 3 days and you are removed — just enter again to rejoin.',
 
     /* 好友 */
     '👥 游戏好友': '👥 Friends',
