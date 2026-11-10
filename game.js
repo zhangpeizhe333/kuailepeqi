@@ -141,17 +141,17 @@
       return `<div class="wx-account">
         <button class="wx-pick" data-wx="${id}">
           <span class="ava big">${a.avatar}</span>
-          <span class="wx-nick">${esc(a.nickname || '微信用户')}</span>
+          <span class="wx-nick">${esc(a.nickname || '玩家')}</span>
           <em>${a.smoke || a.alcohol || a.fit ? '已在坚持' : '还没开始'}</em>
         </button>
         <button class="wx-del" data-del="${id}" title="删除这条登录记录">✕</button>
       </div>`;
     }).join('');
-    sheet(`<h3>微信授权</h3>
+    sheet(`<h3>一键登录</h3>
       <p class="sheet-sub">「快乐佩奇：戒烟戒酒跟我走」申请获取你的昵称和头像</p>
       <div class="wx-accounts">${rows || '<p class="muted tiny" style="text-align:center;padding:10px 0">还没有登录记录，新建一个吧</p>'}</div>
-      <button class="wx-new" id="wxNew"><span>＋</span>使用新的微信登录</button>
-      <p class="muted tiny" style="text-align:center;margin-top:12px">每个微信对应独立的存档，换微信就是换一份坚持</p>`);
+      <button class="wx-new" id="wxNew"><span>＋</span>新建一个存档</button>
+      <p class="muted tiny" style="text-align:center;margin-top:12px">每个存档相互独立，换一个就是换一份坚持</p>`);
     $$('.wx-pick').forEach((b) => b.addEventListener('click', () => {
       const acc = DB.accounts[b.dataset.wx];
       if (acc && acc.acct) { closeSheet(); return openAcctLogin(acc.acct); }
@@ -167,7 +167,7 @@
     const a = DB.accounts[id];
     if (!a) return openWxAuth();
     sheet(`<h3>删除这条登录记录？</h3>
-      <p class="sheet-sub">「${esc(a.nickname || '微信用户')}」的打卡记录、积分、小纸条和小秘密都会被删除，无法恢复。</p>
+      <p class="sheet-sub">「${esc(a.nickname || '玩家')}」的打卡记录、积分、小纸条和小秘密都会被删除，无法恢复。</p>
       <div class="sheet-actions">
         <button class="btn btn-ghost" id="delNo">取消</button>
         <button class="btn btn-danger" id="delYes">删除记录</button>
@@ -184,7 +184,7 @@
   function openRegForm() {
     sheet(`<h3>创建角色</h3>
       <div class="form">
-        <label>微信昵称</label>
+        <label>昵称</label>
         <input id="regNick" maxlength="12" placeholder="给自己起个昵称">
         <label>性别</label>
         <div class="seg" id="regGender">
