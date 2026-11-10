@@ -48,14 +48,14 @@
     '⏰ 小闹钟 · 点我设倒计时': '⏰ Timer · tap to set a countdown',
     '❤️ 生命': '❤️ Life', '😄 快乐': '😄 Joy',
     '🍽️ 喂食': '🍽️ Feed',
-    '🍽️ 喂佩奇吃点东西': '🍽️ Feed Peppa',
+    '🍽️ 喂佩奇吃点东西': '🍽️ Feed Perry',
     '💃 逗一逗': '💃 Tease',
-    '🎈 叫醒佩奇': '🎈 Wake Peppa',
+    '🎈 叫醒佩奇': '🎈 Wake Perry',
     '🎈 玩耍': '🎈 Play',
     '💖 鼓励佩奇': '💖 Encourage',
-    '🤫 跟佩奇说悄悄话': '🤫 Whisper to Peppa',
-    '悄悄告诉佩奇': 'Whisper to Peppa',
-    '只说给佩奇一个人听…': 'Just between you and Peppa…',
+    '🤫 跟佩奇说悄悄话': '🤫 Whisper to Perry',
+    '悄悄告诉佩奇': 'Whisper to Perry',
+    '只说给佩奇一个人听…': 'Just between you and Perry…',
     '还没有悄悄话': 'No whispers yet',
     '⭐ 我的积分 · 抽小纸条': '⭐ My points · draw notes',
     '当前积分': 'Points', '今日已得': 'Earned today',
@@ -65,13 +65,13 @@
     '🍽️ 冷却': '🍽️ Cooldown',
     '每 300 秒可以喂一次，效果持续 24 小时': 'Feed every 300s; effects last 24 hours',
     '每 300 秒可以喂一次，每次选苹果、蛋糕或蘑菇其中的一样。': 'Feed every 300s, choosing an apple, cake or mushroom.',
-    '每 1 分钟可以逗一次，佩奇会跳舞 5 秒。': 'Tease once a minute; Peppa dances for 5 seconds.',
-    '佩奇脑袋变大 30%，持续 24 小时。': "Peppa's head grows 30% bigger for 24 hours.",
+    '每 1 分钟可以逗一次，佩奇会跳舞 5 秒。': 'Tease once a minute; Perry dances for 5 seconds.',
+    '佩奇脑袋变大 30%，持续 24 小时。': "Perry's head grows 30% bigger for 24 hours.",
     '状态已经在生效时，再喂同一样东西，魅力值 +1。': 'Feed the same effect again while active: +1 charm.',
-    '现实时间 3 天没有喂佩奇，佩奇就会离开，魅力值清零。之后可以重新养一只。': 'Unfed for 3 real days, Peppa leaves and charm resets. You can raise a new one.',
-    '魅力 10 / 50 / 200 会出现 1 / 2 / 3 个小佩奇，发色依次是黄、白、红，最多 3 个。': 'Charm 10/50/200 spawns 1/2/3 mini Peppas (yellow, white, red), up to 3.',
+    '现实时间 3 天没有喂佩奇，佩奇就会离开，魅力值清零。之后可以重新养一只。': 'Unfed for 3 real days, Perry leaves and charm resets. You can raise a new one.',
+    '魅力 10 / 50 / 200 会出现 1 / 2 / 3 个小佩奇，发色依次是黄、白、红，最多 3 个。': 'Charm 10/50/200 spawns 1/2/3 mini Perrys (yellow, white, red), up to 3.',
     '点顶部的「小闹钟」可以定一个目标时间，之后会一直显示距离目标还剩多少天多少小时多少分。': 'Tap the timer on top to set a goal — the countdown stays at the top of the page.',
-    '：戒烟、戒酒、运动每打卡一次 +1 积分，一天最多 3 积分；逗一逗佩奇每次 +1 积分，一天最多 2 积分。20 积分抽一张小纸条，随机抽，佩奇写给你的话都在这儿。': ': each check-in (smoking/drinking/workout) earns +1 point, up to 3 a day; teasing Peppa earns +1, up to 2 a day. 20 points draws a random note from Peppa.',
+    '：戒烟、戒酒、运动每打卡一次 +1 积分，一天最多 3 积分；逗一逗佩奇每次 +1 积分，一天最多 2 积分。20 积分抽一张小纸条，随机抽，佩奇写给你的话都在这儿。': ': each check-in (smoking/drinking/workout) earns +1 point, up to 3 a day; teasing Perry earns +1, up to 2 a day. 20 points draws a random note from Perry.',
     '🍎 苹果': '🍎 Apple', '🍰 蛋糕': '🍰 Cake', '🍄 蘑菇': '🍄 Mushroom',
 
     /* 佩奇反应 */
@@ -85,27 +85,27 @@
     '嘿嘿，被鼓励到了～': 'Hehe, feeling encouraged~',
     '谢谢你呀，我今天超有干劲！': 'Thanks! I feel super motivated today!',
     '嘿嘿，最喜欢和你玩啦': 'Hehe, playing with you is the best',
-    '扭起来了！': 'Look at me dance!', '佩奇跳起了小舞～': 'Peppa does a little dance~',
-    '佩奇：快看我表演': 'Peppa: watch my show!',
+    '扭起来了！': 'Look at me dance!', '佩奇跳起了小舞～': 'Perry does a little dance~',
+    '佩奇：快看我表演': 'Perry: watch my show!',
     '咔嚓咔嚓真香': 'Crunch crunch — tasty!', '嗷呜——好吃！': 'Awooo — yummy!',
     '再喂真要成球啦！': "Feed me more and I'll be a ball!",
-    '佩奇的脑袋大了一圈！': "Peppa's head got way bigger!",
+    '佩奇的脑袋大了一圈！': "Perry's head got way bigger!",
     '旁边出现了一个双马尾女孩！': 'A twin-tail girl appeared beside you!',
     '女孩已经在啦，魅力 +1': 'The girl is already here — charm +1',
     '脑袋已经很大了，魅力 +1': 'Head already huge — charm +1',
-    '佩奇已经在泡澡啦，魅力 +1': 'Peppa is already bathing — charm +1',
+    '佩奇已经在泡澡啦，魅力 +1': 'Perry is already bathing — charm +1',
     '小小的我在这里': 'Little me is right here',
-    '我是小佩奇': "I'm Little Peppa",
+    '我是小佩奇': "I'm Little Perry",
     '我叫小美，你好呀': "I'm Mei, hi there!",
-    '佩奇的朋友就是我': "Peppa's friend is me",
+    '佩奇的朋友就是我': "Perry's friend is me",
     '诶？是在叫我吗': 'Eh? You calling me?',
     '戳我干嘛呀': 'Hey, why poke me?',
     '我在呢我在呢': "I'm here, I'm here!",
     '我很快乐！！': "I'm SO happy!!",
     '唔…睡醒了！': 'Mmh… awake now!',
-    '佩奇揉揉眼睛爬起来啦': 'Peppa rubs her eyes and gets up',
-    '佩奇等你等到睡着了…': 'Peppa waited and fell asleep…',
-    '😴 佩奇睡着啦，先陪它玩一下～': '😴 Peppa is asleep — play with her first~',
+    '佩奇揉揉眼睛爬起来啦': 'Perry rubs her eyes and gets up',
+    '佩奇等你等到睡着了…': 'Perry waited and fell asleep…',
+    '😴 佩奇睡着啦，先陪它玩一下～': '😴 Perry is asleep — play with her first~',
     '🤗 抱一抱': '🤗 Hug', '🤚 摸摸头': '🤚 Pat', '🖐️ 拍拍肩': '🖐️ Shoulder tap',
     '🦵 踹一脚': '🦵 Kick', '👊 打一拳': '👊 Punch', '🍗 疯狂喂食': '🍗 Feast',
     '🐶 汪！汪！': '🐶 Woof! Woof!', '汪！': 'Woof!', '汪汪！': 'Woof woof!', '汪汪汪！': 'Woof woof woof!',
@@ -351,7 +351,7 @@
 
     /* 小纸条 */
     '📝 已抽到的小纸条': '📝 Notes collected',
-    '📝 佩奇写给你的': '📝 A note from Peppa',
+    '📝 佩奇写给你的': '📝 A note from Perry',
     '还没有抽过小纸条，攒够 20 积分来抽一张吧': 'No notes yet — earn 20 points to draw one',
     '这张你之前抽到过啦，只记一次': 'Already have this one — counted once',
     '会员今日免费次数已用': 'free VIP draw used today',
@@ -360,6 +360,8 @@
     '在浏览器菜单里再点「下载安卓 App」就能下载安装啦': 'In the browser menu tap "Android App" to download & install',
 
     '玩家': 'Player',
+    '7 天': '7 days', '30 天': '30 days', '90 天': '90 days', '180 天': '180 days',
+    '365 天': '365 days', '长期': 'Lifetime',
     '苹果': 'Apple', '蛋糕': 'Cake', '蘑菇': 'Mushroom',
     '📊 戒烟数据': '📊 Quit-Smoking Stats', '📊 戒酒数据': '📊 Sober Stats', '📊 运动数据': '📊 Workout Stats',
     '开始戒烟': 'Smoke-free start', '开始戒酒': 'Sober start', '未打卡': 'Not checked in',
@@ -463,7 +465,36 @@
     '过去都是假的，回忆是一条没有归途的路。——《百年孤独》': 'The past was a lie; memory, a road with no return. — One Hundred Years of Solitude',
     '天生我材必有用，千金散尽还复来。—— 李白': 'Heaven made me — my talent must serve; gold scattered will come back again. — Li Bai',
     '宝剑锋从磨砺出，梅花香自苦寒来。——《警世贤文》': "A blade's edge comes from grinding; plum blossom's scent from bitter cold. — Maxims to Awaken the World",
-    '行路难，行路难，多歧路，今安在？—— 李白': 'Hard is the road, hard the road — forks everywhere; where is my way? — Li Bai'
+    '行路难，行路难，多歧路，今安在？—— 李白': 'Hard is the road, hard the road — forks everywhere; where is my way? — Li Bai',
+
+    /* 互动回应补充 */
+    '我错了': 'My bad!', '再也不喝了': 'Never again!', '一下子清醒了': 'Wide awake now',
+    '有你在，我什么都不怕': "With you here I'm not scared of anything",
+    '已经快乐到满格啦～': 'Joy fully charged~', '嘿嘿，我超快乐！': "Hehe, I'm SO happy!",
+    '佩奇开心地转圈圈': 'Perry spins in circles', '再来一次！': 'Again! Again!',
+    '佩奇笑得眼睛都没了': 'Perry is all smiles!', '呀，你回来啦～': "Yay, you're back~",
+    '佩奇跳进洗澡池里啦！': 'Perry jumped into the bath!',
+    '想说点什么呀': 'Type something first', '佩奇记在心里了': "Perry keeps it in her heart",
+    '佩奇已经不在了…': 'Perry is gone…', '加油，宝贝': 'Keep going, buddy',
+    '胖成球的小盆友来陪你练！': 'A chubby buddy joins your workout!',
+    '瘦成棍的小盆友来陪你吃！': 'A skinny buddy shows up to eat!',
+    '完美身材的小伙伴来啦！': 'Your perfect-shape buddy is here!',
+    '粘贴给好友，点开就能玩': 'Paste to a friend — it opens right up',
+    '生效中 +1': 'Active +1', '未开始': 'Not started',
+    '还没开始打卡': 'No check-ins yet', '未命名': 'Unnamed', '匿名玩家': 'Anonymous Player',
+    '小伙伴': 'Buddy', '＋ 好友': '＋ Add', '＋ 添加': '＋ Add',
+    '操作失败，稍后再试': 'Something went wrong — try later',
+    '没发出去，再试一次': "Couldn't send — try again",
+    '网络不太顺，再试一次': 'Poor network — try again',
+    '没删掉，再试一次': "Couldn't delete — try again",
+    '没改成，稍后再试': "Couldn't change — try later",
+    '安装包下载到手机，装好就是原生应用': 'Downloads the APK — install it as a native app',
+
+    /* 规则说明加粗标签 */
+    '🍽️ 喂食': '🍽️ Feed', '💃 逗一逗': '💃 Tease', '📝 小纸条': '📝 Notes',
+    '＋1 魅力': '＋1 Charm', '✨ 小佩奇': '✨ Mini Perrys', '🪦 会离开': '🪦 Leaving',
+    '佩奇跳进一个大洗澡池里泡澡（有泡泡和小黄鸭），持续 24 小时。': 'Perry hops into a big bubble bath (with foam and a rubber duck) for 24 hours.',
+    '佩奇旁边出现一个漂亮的双马尾女孩，持续 24 小时。': 'A pretty twin-tail girl appears beside Perry for 24 hours.'
   };
 
   /* ---------------- 正则词典：动态文案 ---------------- */
@@ -476,6 +507,8 @@
     [/^当前账号：(.+) · 换手机登录这个账号就能找回记录$/, 'Current account: $1 · log in on any phone to recover'],
     [/^当前账号：(.+)$/, 'Current account: $1'],
     [/^账号：(.+)$/, 'Account: $1'],
+    [/^开通成功，(\d+) 天会员已生效$/, 'Success! $1-day VIP is now active'],
+    [/^开通成功，长期会员已生效$/, 'Success! Lifetime VIP is now active'],
     [/^开通成功，(.+)$/, 'Success! $1'],
     [/^· 第 (\d+) 天$/, '· Day $1'],
     [/^🍽️ 冷却 (\d+)s$/, '🍽️ Cooldown $1s'],
@@ -483,7 +516,7 @@
     [/^(\d+)天(\d+)小时(\d+)分钟$/, '$1d $2h $3m'],
     [/^(\d+)年(\d+)月(\d+)日$/, function (m, y, mo, d) { return mo3(+mo) + ' ' + d + ', ' + y; }],
     [/^(\d+)月(\d+)日$/, function (m, mo, d) { return mo3(+mo) + ' ' + d; }],
-    [/^(\d+)月(\d+)日 · 佩奇：(.+)$/, function (m, mo, d, t) { return mo3(+mo) + ' ' + d + ' · Peppa: ' + t; }],
+    [/^(\d+)月(\d+)日 · 佩奇：(.+)$/, function (m, mo, d, t) { var g = tr(t); return mo3(+mo) + ' ' + d + ' · Perry: ' + (g || t); }],
     [/^(\d+) 年 (\d+) 月$/, function (m, y, mo) { return (MONTHS[+mo - 1] || mo) + ' ' + y; }],
     [/^(\d+) 年 (\d+) 月 (\d+) 日 周(.) · (\d{1,2}):(\d{2})$/, function (m, y, mo, d, w, hh, mm) { return WD_MAP[w] + ', ' + mo3(+mo) + ' ' + d + ', ' + y + ' · ' + ('0' + hh).slice(-2) + ':' + mm; }],
     [/欢迎回来，(.+)！/, 'Welcome back, $1!'],
@@ -491,7 +524,12 @@
     [/^(.+) 的菜单$/, "$1's Menu"],
     [/^(.+) · 换手机可找回记录$/, '$1 · log in anywhere to recover'],
     [/^已拉黑 (.+)，不再收到TA的私信$/, "Blocked $1 — their DMs won't reach you"],
-    [/^已退出 (.+)，下次随时再进$/, 'Left $1 — come back anytime'],
+    [/^已取消拉黑 (.+)$/, 'Unblocked $1'],
+    [/^已退出(.+)，下次随时再进$/, 'Left $1 — come back anytime'],
+    [/^重新开始(戒烟|戒酒|运动)？$/, function (m, x) { return 'Restart ' + ({ '戒烟': 'quitting', '戒酒': 'sober run', '运动': 'workouts' }[x]) + '?'; }],
+    [/^已重新开始(戒烟|戒酒|运动)$/, function (m, x) { return 'Restarted ' + ({ '戒烟': 'quitting', '戒酒': 'sober run', '运动': 'workouts' }[x]); }],
+    [/^会清空(戒烟|戒酒|运动)的全部打卡记录和开始时间，不能撤销。$/, function (m, x) { return "This erases all of your " + ({ '戒烟': 'smoke-free', '戒酒': 'sober', '运动': 'workout' }[x]) + " check-ins and start date. It can't be undone."; }],
+    [/^打卡断了也不影响称号，随时可以接着打。当前累计打卡 (\d+) 天。$/, "Streak breaks don't affect titles — pick up anytime. Total: $1 days."],
     [/^只会删除你自己这边的记录，和「(.+)」的聊天会从私信列表消失。确定删除吗？$/, 'Only your copy is deleted — the chat with "$1" stays on their side. Delete?'],
     [/^会清空 (.+) 的全部打卡记录和开始时间，不能撤销。$/, "This erases all of $1's check-ins and start date. It can't be undone."],
     [/^「(.+)」的打卡记录、积分、小纸条和小秘密都会被删除，无法恢复。$/, '"$1"\'s check-ins, points, notes and secrets will be gone for good.'],
@@ -516,13 +554,28 @@
     [/^([\d.]+) 元$/, '¥$1'],
     [/^([\d.]+)\/10 分$/, '$1/10'],
     [/^(\d+)分钟$/, '$1 min'],
-    [/^佩奇喘口气，(\d+) 秒后再逗$/, 'Peppa needs a breather — $1s'],
+    [/^佩奇喘口气，(\d+) 秒后再逗$/, 'Perry needs a breather — $1s'],
     [/^刚喂过啦，(\d+) 秒后才能再喂$/, 'Just fed — next feed in $1s'],
-    [/^佩奇刚吃过，(.+)$/, 'Peppa just ate — $1'],
+    [/^佩奇刚吃过，(\d+) 秒后再喂$/, 'Perry just ate — next feed in $1s'],
+    [/^佩奇刚吃过，(.+)$/, 'Perry just ate — $1'],
     [/^开始时间已改为 ?(.+)$/, 'Start date changed to $1'],
+    [/^(?:戒烟|戒酒|运动)开始时间已改为 (.+)$/, 'Start date changed to $1'],
+    [/^当前开始：(\S+) · 今天之前的日期可选$/, 'Current start: $1 · dates before today are pickable'],
+    [/^补上这 (\d+) 天$/, 'Add these $1 days'],
+    [/^补签成功 (\d+) 天，打卡次数 \+(\d+)$/, 'Made up $1 days · +$2 check-ins'],
+    [/^✅ = 已打卡 · 已补 (\d+) 天$/, '✅ = checked in · $1 made up'],
+    [/^✅ = 已打卡 · 已补 (\d+) 天 · 本次已选 (\d+) 天$/, '✅ checked in · $1 made up · $2 selected'],
+    [/^(.+) · 生效中$/, function (m, p1) { var tp = tr(p1); return (tp || p1) + ' · active'; }],
+    [/^共 (\d+) 张$/, '$1 notes collected'],
+    [/^(\d+)小时(\d+)分钟$/, '$1h $2m'],
+    [/^0分钟$/, '0 min'],
+    [/^💃 冷却 (\d+)s$/, '💃 Cooldown $1s'],
     [/^本次已选 (\d+)/, 'Selected: $1'],
     [/^社区成员（(\d+)）$/, 'Members ($1)'],
-    [/^新佩奇来啦，(\d+) 分钟内记得喂它$/, 'New Peppa! Feed her within $1 min'],
+    [/^新佩奇来啦，(\d+) 分钟内记得喂它$/, 'New Perry! Feed her within $1 min'],
+    [/^佩奇已经在泡澡啦，魅力 \+1 · 魅力 (\d+)$/, 'Perry is already bathing — charm +1 · total $1'],
+    [/^脑袋已经很大了，魅力 \+1 · 魅力 (\d+)$/, 'Head already huge — charm +1 · total $1'],
+    [/^女孩已经在啦，魅力 \+1 · 魅力 (\d+)$/, 'The girl is already here — charm +1 · total $1'],
     [/^这张你之前抽到过啦，只记一次.*$/, 'Already have this one — counted once'],
     [/^当前累计打卡 (\d+) 天，打卡次数 \+ ?(\d+)。?$/, "Skipped days don't affect titles. Total: $1 days · +$2 per check-in"],
     [/^🚭 加油，宝贝\s*⭐\+1$/, '🚭 Keep going, buddy! ⭐+1'],
@@ -537,7 +590,8 @@
       var s = localStorage.getItem('kk_lang');
       if (s === 'en' || s === 'zh') return s;
     } catch (e) {}
-    return (navigator.language || 'zh').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en';
+    /* iOS 版默认英文 */
+    return 'en';
   }
   var LANG = detect();
 
@@ -551,7 +605,8 @@
     return null;
   }
 
-  var SKIP_SEL = '.chat-body';
+  /* 只跳过聊天气泡（用户输入内容）；社区的提示语（进入中/退出等）照常翻译 */
+  var SKIP_SEL = '.chat-bub,.msg-sign';
 
   function walkText(root) {
     var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
@@ -566,6 +621,15 @@
       var core = n.nodeValue.trim();
       if (p.classList && p.classList.contains('cal-w') && WD_MAP[core]) { n.nodeValue = WD_MAP[core]; continue; }
       var t = tr(core);
+      if (!t) {
+        /* toast 等场景文本是「emoji + 内容」合在一个节点里（如 🌞 呀，你回来啦～），
+           首段是纯符号/emoji 时剥离再查词典，翻译回填保留原前缀 */
+        var m2 = core.match(/^([^A-Za-z0-9\u4e00-\u9fff]+)\s+(.+)$/);
+        if (m2) {
+          var t2 = tr(m2[2]);
+          if (t2) { n.nodeValue = n.nodeValue.replace(m2[2], t2); continue; }
+        }
+      }
       if (t && t !== core) n.nodeValue = n.nodeValue.replace(core, t);
     }
   }
@@ -591,7 +655,7 @@
     try { walkText(root); walkAttrs(root); } catch (e) {}
   }
 
-  /* 页面标题与 html lang */
+  /* 页面标题与 html lang；英文模式下品牌名只显示一遍 */
   function applyChrome() {
     if (LANG === 'en') {
       document.title = 'Quit Smoke & Drink With Me';
@@ -601,14 +665,41 @@
       document.documentElement.lang = 'zh-CN';
     }
   }
+  /* 英文品牌名只出现一次：登录页大标题用全名、副标题隐藏；顶栏同理 */
+  function applyBrand() {
+    if (LANG !== 'en') return;
+    var NAME = 'Quit Smoke & Drink With Me';
+    var h1 = document.querySelector('#login .logo h1');
+    var sub = document.querySelector('#login .sub-title');
+    var logo = document.querySelector('#login .logo');
+    if (h1) h1.textContent = NAME;
+    if (sub) sub.style.display = 'none';
+    if (logo) logo.classList.add('logo-en');
+    var tb = document.querySelector('.tb-wrap');
+    if (tb) {
+      tb.classList.add('tb-en');
+      if (tb.firstChild && tb.firstChild.nodeType === 3) tb.firstChild.nodeValue = NAME;
+    }
+    var credit = document.querySelector('.brand-credit');
+    if (credit) credit.style.display = 'none';
+  }
+  /* 登录页语言快捷切换（国旗按钮） */
+  function bindLangPick() {
+    var zh = document.getElementById('langZh'), en = document.getElementById('langEn');
+    if (!zh || !en) return;
+    zh.classList.toggle('on', LANG === 'zh');
+    en.classList.toggle('on', LANG === 'en');
+    zh.onclick = function () { if (LANG !== 'zh') setLang('zh'); };
+    en.onclick = function () { if (LANG !== 'en') setLang('en'); };
+  }
 
   /* 菜单语言切换面板（由 game.js 调用） */
   function langSheet(sheetFn, closeFn) {
     var cur = LANG === 'en' ? 'English' : '中文';
     sheetFn('<h3>🌐 Language / 语言</h3><p class="sheet-sub">Current: ' + cur + '</p>' +
       '<div class="sheet-actions col">' +
-      '<button class="btn btn-primary btn-lg" id="lgEn">English</button>' +
-      '<button class="btn btn-primary btn-lg" id="lgZh">中文</button>' +
+      '<button class="btn btn-primary btn-lg' + (LANG === 'en' ? ' lang-on' : '') + '" id="lgEn">🇺🇸 English</button>' +
+      '<button class="btn btn-primary btn-lg' + (LANG === 'zh' ? ' lang-on' : '') + '" id="lgZh">🇨🇳 中文</button>' +
       '</div>');
     document.getElementById('lgEn').onclick = function () { setLang('en'); };
     document.getElementById('lgZh').onclick = function () { setLang('zh'); };
@@ -636,9 +727,11 @@
 
   applyChrome();
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { apply(document.body); });
+    document.addEventListener('DOMContentLoaded', function () { apply(document.body); applyBrand(); bindLangPick(); });
   } else {
     apply(document.body);
+    applyBrand();
+    bindLangPick();
   }
   if (window.MutationObserver) {
     new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
