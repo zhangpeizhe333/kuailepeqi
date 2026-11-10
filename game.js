@@ -758,18 +758,55 @@
   }
 
   /* ---------------- 佩奇 ---------------- */
-  /* 十张小纸条：古诗词与句子 */
+  /* 小纸条：古诗词与句子（共 47 张） */
   const NOTES = [
-    '顺其自然，随遇而安。（《庄子》）',
-    '本来无一物，何处惹尘埃。（惠能）',
-    '人生如逆旅，我亦是行人。（苏轼）',
-    '乱花渐欲迷人眼，浅草才能没马蹄。（白居易）',
-    '知足者常乐，终身不辱。（老子）',
-    '盛年不重来，一日难再晨。（陶渊明）',
-    '浆声灯影里的日子，过一天，少一天。（朱自清）',
-    '水满则溢，月盈则亏。（《淮南子》）',
-    '天下事有难易乎？为之，则难者亦易矣。（彭端淑）',
-    '临渊羡鱼，不如退而结网。（《汉书》）',
+    '顺其自然，随遇而安。——《庄子》',
+    '本来无一物，何处惹尘埃。—— 惠能',
+    '人生如逆旅，我亦是行人。—— 苏轼',
+    '乱花渐欲迷人眼，浅草才能没马蹄。—— 白居易',
+    '知足者常乐，终身不辱。—— 老子',
+    '盛年不重来，一日难再晨。—— 陶渊明',
+    '浆声灯影里的日子，过一天，少一天。—— 朱自清',
+    '水满则溢，月盈则亏。——《淮南子》',
+    '天下事有难易乎？为之，则难者亦易矣。—— 彭端淑',
+    '临渊羡鱼，不如退而结网。——《汉书》',
+    '志士惜日短，愁人知夜长。—— 傅玄',
+    '海纳百川，有容乃大。—— 林则徐',
+    '绳锯木断，水滴石穿。—— 罗大经',
+    '锲而不舍，金石可镂。——《荀子·劝学》',
+    '千里之行，始于足下。——《老子》',
+    '业精于勤，荒于嬉。—— 韩愈',
+    '己所不欲，勿施于人。—— 孔子',
+    '世事一场大梦，人生几度秋凉。—— 苏轼',
+    '莫道桑榆晚，为霞尚满天。—— 刘禹锡',
+    '回首向来萧瑟处，归去，也无风雨也无晴。—— 苏轼',
+    '竹杖芒鞋轻胜马，谁怕？一蓑烟雨任平生。—— 苏轼',
+    '长风破浪会有时，直挂云帆济沧海。—— 李白',
+    '天行健，君子以自强不息。——《周易》',
+    '胜人者有力，自胜者强。—— 老子',
+    '路漫漫其修远兮，吾将上下而求索。—— 屈原',
+    '博观而约取，厚积而薄发。—— 苏轼',
+    '一个人只拥有此生此世是不够的。——《爱你就像爱生命》',
+    '岁月极美，在于它必然的流逝。——《温柔的夜》',
+    '我们听过无数的道理，却仍旧过不好这一生。——《后会无期》',
+    '世事离局，局内人迷里糊涂。——《围城》',
+    '你如果认识从前的我，就会原谅我。——《倾城之恋》',
+    '孤独从一开始就注定要跟随你一生。——《百年孤独》',
+    '人是为了活着本身而活着的。——《活着》',
+    '现在无法挽留，未来无法预期。——《解忧杂货店》',
+    '越是深沉的痛苦，越是无声。——《平凡的世界》',
+    '我爱这土地，眼里常含泪水。——《艾青诗选》',
+    '习惯了黑暗，就不要恐惧光明。——《黑暗的左手》',
+    '一个人可以被毁灭，但不能被打败。——《老人与海》',
+    '逃避现实的人，才会沉溺于幻想。——《呼啸山庄》',
+    '生存还是毁灭，这是一个问题。——《哈姆雷特》',
+    '人是生而自由的，却无往不在枷锁中。——《社会契约论》',
+    '知者不惑，仁者不忧，勇者不惧。——《论语》',
+    '路遥知马力，日久见人心。——《元曲选》',
+    '过去都是假的，回忆是一条没有归途的路。——《百年孤独》',
+    '天生我材必有用，千金散尽还复来。—— 李白',
+    '宝剑锋从磨砺出，梅花香自苦寒来。——《警世贤文》',
+    '行路难，行路难，多歧路，今安在？—— 李白',
   ];
   /* 点头像时的回应（睡着时不回应） */
   const TAP_LINES = {
@@ -1086,8 +1123,42 @@
     renderPeki();
   }
 
+  /* 已抽到的纸条索引（去重，按抽到的先后排；重复抽到只保留一条） */
+  function noteUniq() {
+    const seen = [];
+    (S.notes || []).forEach((i) => {
+      if (NOTES[i] !== undefined && !seen.includes(i)) seen.push(i);
+    });
+    return seen;
+  }
+
+  /* 已抽到的小纸条：单独一页展示 */
+  function noteAllSheet() {
+    const seen = noteUniq();
+    sheet(`<h3>📝 已抽到的小纸条</h3>
+      <p class="sheet-sub">共 ${seen.length} 张${seen.length ? ' · 点一条看全文' : ''}</p>
+      ${seen.length
+        ? `<div class="note-list note-list-all">${seen.map((i, j) => `<button class="note-item" data-note="${i}" data-idx="${j + 1}"><span class="note-idx">${j + 1}</span><span class="note-txt">${esc(NOTES[i])}</span></button>`).join('')}</div>`
+        : '<p class="muted tiny" style="text-align:center;padding:26px 0">还没有抽过小纸条，攒够 20 积分来抽一张吧</p>'}
+      <button class="btn btn-ghost btn-lg" id="noteAllClose" style="margin-top:14px">收起</button>`);
+    $('#noteAllClose').onclick = closeSheet;
+    $$('.note-item[data-note]').forEach((b) => {
+      b.onclick = () => {
+        const i = +b.dataset.note, idx = +b.dataset.idx;
+        sheet(`<h3>📝 第 ${idx} 张纸条</h3>
+          <div class="note-big" style="margin-top:10px">${esc(NOTES[i])}</div>
+          <div class="sheet-actions">
+            <button class="btn btn-ghost" id="noteBack">返回列表</button>
+            <button class="btn btn-primary" id="noteDone">收好了</button>
+          </div>`);
+        $('#noteBack').onclick = noteAllSheet;
+        $('#noteDone').onclick = closeSheet;
+      };
+    });
+  }
+
   function renderPeki() {
-    const got = S.notes.length;
+    const got = noteUniq().length;
     const todayN = todayPoints();
     const st = pkTick();
     const now = Date.now();
@@ -1190,10 +1261,7 @@
         <h3>⭐ 我的积分 · 抽小纸条${vipOn() ? '<span class="vip-tag">VIP</span>' : ''}</h3>
         ${statsRow([['当前积分', `<span id="curPts">${S.points}</span>`], ['今日已得', `<span id="todayPts">${todayN}/5</span>`]])}
         <button class="btn btn-primary btn-lg" id="drawBox" ${(!vipFreeLeft() && S.points < 20) ? 'disabled' : ''} style="margin-top:14px">${vipFreeLeft() ? '🎫 会员免费抽一张' : '抽一张小纸条（⭐20）'}</button>
-        <div class="note-wrap">
-          <p class="note-title">📝 已抽到的小纸条 ${got} 张${got ? '（点一下看全文）' : ''}</p>
-          ${got ? `<div class="note-list">${S.notes.map((i, j) => `<button class="note-item" data-note="${i}" data-idx="${j + 1}"><span class="note-idx">${j + 1}</span><span class="note-txt">${esc(NOTES[i])}</span></button>`).join('')}</div>` : '<p class="muted tiny">还没有抽过小纸条，攒够 20 积分来抽一张吧。</p>'}
-        </div>
+        <button class="btn btn-ghost btn-lg" id="noteAll" style="margin-top:10px">📝 已抽到的小纸条（${got} 张）</button>
       </div>
       <button class="btn btn-ghost btn-lg rules-btn" id="pekiRules">📖 佩奇规则说明</button>
     `;
@@ -1247,15 +1315,9 @@
         if (who === 'mini') { el.classList.remove('mini-bop'); void el.getBBox().width; el.classList.add('mini-bop'); }
       });
     });
-    /* 已抽到的小纸条：点一下看全文 */
-    $$('.note-item').forEach((b) => {
-      b.onclick = () => {
-        const i = +b.dataset.note, idx = +b.dataset.idx;
-        sheet(`<h3>📝 第 ${idx} 张纸条</h3>
-          <div class="note-big" style="margin-top:10px">${esc(NOTES[i])}</div>
-          <button class="btn btn-primary btn-lg" style="margin-top:14px" onclick="document.querySelector('.sheet-mask').remove()">收好了</button>`);
-      };
-    });
+    /* 已抽到的小纸条：点按钮进单独一页查看 */
+    const noteAllBtn = $('#noteAll');
+    if (noteAllBtn) noteAllBtn.onclick = noteAllSheet;
     clearInterval(pkClockTimer);
     let pkSec = 0;
     pkClockTimer = setInterval(() => {
@@ -1286,15 +1348,16 @@
     $('#drawBox').onclick = () => {
       const free = vipFreeLeft();
       if (!free && S.points < 20) return toast('积分不够，先去打卡攒 20 分', '⭐');
-      /* 一共十张小纸条，可以一直抽，可能抽到重复的 */
+      /* 全池随机抽，可能抽到重复的；重复的纸条只记一次 */
       const got2 = Math.floor(Math.random() * NOTES.length);
+      const dup = (S.notes || []).includes(got2);
       if (free) S.vipFree = { d: todayStr(), used: true };
       else S.points -= 20;
-      S.notes.push(got2);
+      if (!dup) S.notes.push(got2);
       persist();
       sheet(`<h3>📝 佩奇写给你的</h3>
         <div class="note-big">${NOTES[got2]}</div>
-        <p class="muted tiny" style="text-align:center">已抽 ${S.notes.length} 张 · ${free ? '会员今日免费次数已用' : '剩余积分 ⭐' + S.points}</p>
+        <p class="muted tiny" style="text-align:center">${dup ? '这张你之前抽到过啦，只记一次 · ' : ''}已抽 ${noteUniq().length} 张 · ${free ? '会员今日免费次数已用' : '剩余积分 ⭐' + S.points}</p>
         <button class="btn btn-primary btn-lg" onclick="document.querySelector('.sheet-mask').remove()">收好了</button>`);
       render();
     };
