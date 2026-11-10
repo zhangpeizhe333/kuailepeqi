@@ -45,7 +45,7 @@ delete from pk_friends    where owner_uid in ('ua6c12e8d22b08ec4','ubc6e3308efc8
 delete from pk_members    where uid in ('ua6c12e8d22b08ec4','ubc6e3308efc8382e','uef55f195e52d6e2a');
 delete from pk_chat       where uid in ('ua6c12e8d22b08ec4','ubc6e3308efc8382e','uef55f195e52d6e2a');
 delete from pk_codes      where used_by in ('ua6c12e8d22b08ec4','ubc6e3308efc8382e','uef55f195e52d6e2a') or code like 'KP-TEST%';
-delete from pk_players    where uid in ('ua6c12e8d22b08ec4','ubc6e3308efc8382e','uef55f195e52d6e2a');
-delete from pk_accounts   where username in ('t109608536','t109608536b','ui272439686');
+delete from pk_players    where uid in ('ua6c12e8d22b08ec4','ubc6e3308efc8382e','uef55f195e52d6e2a') or uid = 'uc955dd9674c8b10d';
+delete from pk_accounts   where username in ('t109608536','t109608536b','ui272439686','uicheck');
 
 -- 完成：注册规则已改为 6-16 位，「佩奇的朋友」与自动化测试账号已全部删除
