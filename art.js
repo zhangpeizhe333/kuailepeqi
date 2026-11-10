@@ -229,9 +229,9 @@
     </g></g>`;
   }
 
-  /* 小狗（坐姿 · 原点 = 脚底中心） */
-  function dog() {
-    const fur = '#c98d5a', furDk = '#a9703f';
+  /* 小狗（坐姿 · 原点 = 脚底中心）· 可传毛色，默认小黄狗 */
+  function dog(fur0, furDk0) {
+    const fur = fur0 || '#c98d5a', furDk = furDk0 || '#a9703f';
     return `<g>
       <ellipse cx="0" cy="4" rx="30" ry="5" fill="#000" opacity=".16"/>
       <path d="M-16 0 Q-22 -18 -10 -24 L8 -24 Q20 -18 18 -2 Q16 4 6 4 L-8 4 Q-16 4 -16 0 Z" fill="${fur}" stroke="${furDk}" stroke-width="2.4" stroke-linejoin="round"/>
@@ -819,9 +819,20 @@
         ${kid(Object.assign({}, k, { scale: pos.kidScale }))}
       </g>
     </g>`;
+    /* VIP：小朋友身边两只萤火虫（床景里小朋友躺在床上，位置单独取） */
+    let ffSvg = '';
+    if (k.vip) {
+      const fx = pos.kid === false ? 292 : pos.kidX;
+      const fy = pos.kid === false ? 404 : pos.kidY - 150;
+      const fly = (x, y, delay, dur) => `<g transform="translate(${x.toFixed(0)} ${y.toFixed(0)})"><g class="ff-fly" style="animation-delay:${delay}s;animation-duration:${dur}s">
+        <circle r="11" fill="#ffe98a" opacity=".10"/><circle r="6" fill="#ffe98a" opacity=".2"/>
+        <circle r="2.5" fill="#fff3b0"/><circle r="1.2" fill="#fffbe0"/>
+      </g></g>`;
+      ffSvg = `<g class="vip-ff">${fly(fx - 96, fy + 26, -0.4, 6)}${fly(fx + 92, fy - 14, -3.1, 7.4)}</g>`;
+    }
     global.QuitArt.lastPos = pos;
-    if (pos.kid === false) return artsvg;
-    return artsvg.replace('</svg>', kidSvg + '</svg>');
+    if (pos.kid === false) return artsvg.replace('</svg>', ffSvg + '</svg>');
+    return artsvg.replace('</svg>', kidSvg + ffSvg + '</svg>');
   }
 
   global.QuitArt = { kid, kidSVG, stageOf, peki, pekiHead, pekiBg, pekiAvatar, ghostBody, bath, girlHead, dog, catSit, grave, lungs, liver, belly, scene, shade, forbidden };
