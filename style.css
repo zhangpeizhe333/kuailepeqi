@@ -92,6 +92,12 @@ h3 small { font-weight: 400; }
 }
 .wx-btn:active { transform: scale(.97); }
 .wx-ico { font-size: 20px; }
+.acct-btn {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin-top: 10px; border-radius: 15px; padding: 14px; font-size: 15px; font-weight: 700;
+  color: var(--gold); background: rgba(255, 212, 121, .1); border: 1px solid rgba(255, 212, 121, .32);
+}
+.acct-btn:active { transform: scale(.97); }
 
 /* ---------------- 顶栏 / 底栏 ---------------- */
 .topbar {
