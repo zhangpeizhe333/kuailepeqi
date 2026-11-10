@@ -1620,7 +1620,6 @@
       <div class="chat-top">
         <button class="chat-back" id="dmBack">←</button>
         <div class="chat-title">${esc(peer.avatar || '🐣')} ${esc(peer.nickname)}</div>
-        <button class="chat-menu" id="dmDel" title="删除聊天">🗑</button>
       </div>
       <div class="chat-body" id="dmBody"><p class="muted tiny" style="text-align:center">加载中…</p></div>
       <div class="chat-input">
@@ -1652,28 +1651,6 @@
     await load();
     dmTimer = setInterval(load, 4000);
     $('#dmBack').onclick = () => { clearInterval(dmTimer); dmTimer = null; ov.remove(); };
-    /* 删除聊天（二次确认，云端清空，双方都看不到） */
-    $('#dmDel').onclick = () => {
-      sheet(`<h3>🗑 删除聊天</h3>
-        <p class="sheet-sub">删除后和「${esc(peer.nickname)}」的这些聊天记录会清空，双方都看不到。确定要删吗？</p>
-        <div class="sheet-actions">
-          <button class="btn btn-ghost" id="dmDelNo">再想想</button>
-          <button class="btn btn-primary" id="dmDelYes">确认删除</button>
-        </div>`);
-      $('#dmDelNo').onclick = closeSheet;
-      $('#dmDelYes').onclick = async () => {
-        try {
-          const r = await sbRpc('pk_dm_clear', { p_uid: c.uid, p_token: c.token, p_with: peer.uid });
-          if (r && r.ok) {
-            if (S.dmRead && S.dmRead[peer.uid] !== undefined) { delete S.dmRead[peer.uid]; persist(); }
-            clearInterval(dmTimer); dmTimer = null;
-            closeSheet(); ov.remove();
-            dmCheck();
-            toast('聊天已删除', '🗑');
-          } else { closeSheet(); toast('没删掉，再试一次', '⚠️'); }
-        } catch (err) { closeSheet(); toast('网络不太顺，再试一次', '📡'); }
-      };
-    };
     const send = async () => {
       const el = $('#dmText');
       const t = el.value.trim();
@@ -1706,10 +1683,11 @@
     if (p.smoke_days) t.push('🚬 ' + p.smoke_days + ' 天');
     if (p.alcohol_days) t.push('🍺 ' + p.alcohol_days + ' 天');
     if (p.fit_days) t.push('🏃 ' + p.fit_days + ' 天');
+    const nm = `<b class="fn${p.vip ? ' vip-name' : ''}"><span class="fn-t">${esc(p.nickname)}</span>${p.vip ? '<span class="vip-mini">VIP</span>' : ''}</b>`;
     return `<div class="fr-row">
       <span class="fr-ava">${esc(p.avatar || '🐣')}</span>
       <div class="fr-main">
-        <div class="fr-line1">${nameHtml(p)}${act || ''}</div>
+        <div class="fr-line1">${nm}${act || ''}</div>
         <div class="fr-days">${genderMark(p.gender)} ${t.length ? t.join('　') : '<span>还没开始打卡</span>'}</div>
       </div>
     </div>`;
@@ -1827,13 +1805,17 @@
     if (!dmLatest.length) return toast('还没有收到私信', '✉️');
     if (!S.dmRead || typeof S.dmRead !== 'object') S.dmRead = {};
     sheet(`<h3>✉️ 私信</h3>
+      <p class="sheet-sub">点好友进聊天；点右边 🗑 只删自己这边的记录，对方还能看到</p>
       <div class="dm-latest">${dmLatest.map((m) => {
         const unread = (S.dmRead[m.sender] || 0) < m.mid;
-        return `<button class="fr-row" data-dml="${esc(m.sender)}">
-          <span class="fr-ava">${esc(m.avatar || '🐣')}</span>
-          <div class="fr-info"><b class="${m.vip ? 'vip-name' : ''}">${esc(m.nickname)}${m.vip ? ' <span class="vip-mini">VIP</span>' : ''}</b><small>${genderMark(m.gender)} ${esc(m.body).slice(0, 24)}</small></div>
-          ${unread ? '<span class="dm-dot">新</span>' : ''}
-        </button>`;
+        return `<div class="fr-row dm-row">
+          <button class="dm-open" data-dml="${esc(m.sender)}">
+            <span class="fr-ava">${esc(m.avatar || '🐣')}</span>
+            <div class="fr-info"><b class="${m.vip ? 'vip-name' : ''}">${esc(m.nickname)}${m.vip ? ' <span class="vip-mini">VIP</span>' : ''}</b><small>${genderMark(m.gender)} ${esc(m.body).slice(0, 24)}</small></div>
+            ${unread ? '<span class="dm-dot">新</span>' : ''}
+          </button>
+          <button class="dm-del" data-dmdel="${esc(m.sender)}" title="删除聊天记录">🗑</button>
+        </div>`;
       }).join('')}</div>`);
     $$('[data-dml]').forEach((b) => {
       b.onclick = () => {
@@ -1841,6 +1823,32 @@
         if (!peer) return;
         closeSheet();
         openDm({ uid: peer.sender, nickname: peer.nickname, avatar: peer.avatar, gender: peer.gender, vip: peer.vip });
+      };
+    });
+    $$('[data-dmdel]').forEach((b) => {
+      b.onclick = () => {
+        const peer = dmLatest.find((m) => m.sender === b.dataset.dmdel);
+        if (!peer) return;
+        sheet(`<h3>🗑 删除聊天记录</h3>
+          <p class="sheet-sub">只会删除你自己这边的记录，和「${esc(peer.nickname)}」的聊天会从私信列表消失，对方那边不受影响。确定删除吗？</p>
+          <div class="sheet-actions">
+            <button class="btn btn-ghost" id="dmDelNo">再想想</button>
+            <button class="btn btn-primary" id="dmDelYes">确认删除</button>
+          </div>`);
+        $('#dmDelNo').onclick = () => dmBellSheet();
+        $('#dmDelYes').onclick = async () => {
+          try {
+            const c = cloudId();
+            const r = await sbRpc('pk_dm_clear', { p_uid: c.uid, p_token: c.token, p_with: peer.sender });
+            if (r && r.ok) {
+              if (S.dmRead && S.dmRead[peer.sender] !== undefined) { delete S.dmRead[peer.sender]; persist(); }
+              dmLatest = dmLatest.filter((x) => x.sender !== peer.sender);
+              await dmCheck();
+              if (dmLatest.length) dmBellSheet();
+              else { closeSheet(); toast('聊天记录已删除', '🗑'); }
+            } else { dmBellSheet(); toast('没删掉，再试一次', '⚠️'); }
+          } catch (err) { dmBellSheet(); toast('网络不太顺，再试一次', '📡'); }
+        };
       };
     });
   }
@@ -2123,10 +2131,10 @@
       sheet(`<h3>${esc(S.nickname || '我')} 的菜单</h3>
         <p class="sheet-sub">分享给朋友，或管理当前账号</p>
         <div class="menu-list">
+          <button class="menu-row" id="mFriends"><span>👥</span><div><b>游戏好友</b><small>搜昵称加好友，看对方坚持了多久</small></div></button>
           ${isAndroid ? `<button class="menu-row" id="mApk"><span>📥</span><div><b>下载安卓 App</b><small>安装包下载到手机，装好就是原生应用</small></div></button>` : ''}
           <button class="menu-row" id="mShare"><span>🔗</span><div><b>分享链接</b><small>复制网页链接或安装包链接</small></div></button>
           <button class="menu-row" id="mVip"><span>🎫</span><div><b>会员中心</b><small>${vipOn() ? '已开通 · 还剩 ' + vipLeftDays() + ' 天' : '输入激活码开通'}</small></div></button>
-          <button class="menu-row" id="mFriends"><span>👥</span><div><b>游戏好友</b><small>搜昵称加好友，看对方坚持了多久</small></div></button>
           <button class="menu-row" id="mService"><span>💬</span><div><b>联系客服</b><small>加微信，问题随时找我</small></div></button>
           <button class="menu-row danger" id="mLogout"><span>🚪</span><div><b>退出登录</b><small>记录会保留，可重新登录</small></div></button>
         </div>`);
