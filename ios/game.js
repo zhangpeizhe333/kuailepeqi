@@ -50,6 +50,8 @@
     /* 补签记录：老存档可能没有，补齐三个模块的数组 */
     if (!s.makeup || typeof s.makeup !== 'object') s.makeup = { smoke: [], alcohol: [], fit: [] };
     for (const k of ['smoke', 'alcohol', 'fit']) if (!Array.isArray(s.makeup[k])) s.makeup[k] = [];
+    /* 悄悄话最多保留 5 句，超出裁掉 */
+    if (Array.isArray(s.msgs) && s.msgs.length > 5) s.msgs = s.msgs.slice(0, 5);
     /* 打卡日历历史：老存档补 days 数组（把最近打卡日算进去） */
     for (const k of ['smoke', 'alcohol', 'fit']) {
       const m = s[k];
@@ -1361,8 +1363,9 @@
             <button class="act" id="playBtn">${sleepy ? '🎈 叫醒佩奇' : '🎈 玩耍'}</button>
             <button class="act primary" id="cheerPeki">💖 鼓励佩奇${ptOn ? '<small class="cheer-num">已解锁 🇵🇹 主场</small>' : ''}</button>
           </div>`}
+      <button class="btn btn-ghost btn-lg garden-btn" id="gardenBtn">🌷 佩奇的神秘花园</button>
       <div class="card">
-        <h3>🤫 跟佩奇说悄悄话</h3>
+        <h3>🤫 跟佩奇说悄悄话（${S.msgs.length}/5）</h3>
         <div class="form">
           <input id="msgInput" maxlength="60" placeholder="只说给佩奇一个人听…">
           <button class="btn btn-primary" id="msgSend">悄悄告诉佩奇</button>
@@ -1377,6 +1380,7 @@
       </div>
       <button class="btn btn-ghost btn-lg rules-btn" id="pekiRules">📖 佩奇规则说明</button>
     `;
+    $('#gardenBtn').onclick = openGarden;
     if (dead) {
       $('#revivePk').onclick = revivePeki;
     } else {
@@ -1476,6 +1480,7 @@
     $('#msgSend').onclick = () => {
       const v = $('#msgInput').value.trim();
       if (!v) return toast('想说点什么呀', '🤫');
+      if (S.msgs.length >= 5) return toast('悄悄话最多记 5 句，先删掉一句才能再记', '🤫');
       S.msgs.unshift({ txt: v, ts: Date.now() });
       persist();
       toast('佩奇记在心里了', '🐷');
@@ -1493,6 +1498,155 @@
         persist(); renderPeki();
       }));
     }
+  }
+
+  /* ---------------- 佩奇的神秘花园（公共动态 · 文字/图片 · 7 天自动过期） ---------------- */
+  const GARDEN_TTL = 7 * DAY;
+  let gardenTimer = null;
+
+  /* 图片压缩成 jpeg dataURL（最长边 720，压到 200KB 以内） */
+  function gardenCompress(file, cb) {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const MAX = 720;
+        const sc = Math.min(1, MAX / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * sc)), h = Math.max(1, Math.round(img.height * sc));
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        let q = 0.72, out = cv.toDataURL('image/jpeg', q);
+        while (out.length > 200000 && q > 0.4) { q -= 0.12; out = cv.toDataURL('image/jpeg', q); }
+        URL.revokeObjectURL(url);
+        cb(out.length <= 220000 ? out : null);
+      } catch (err) { URL.revokeObjectURL(url); cb(null); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); cb(null); };
+    img.src = url;
+  }
+
+  function gardenLeftDays(ts) {
+    return Math.max(1, Math.ceil((ts + GARDEN_TTL - Date.now()) / DAY));
+  }
+
+  function openGarden() {
+    if ($('#gardenOv')) return;
+    const c = cloudId();
+    let pendingImg = '';
+    const ov = document.createElement('div');
+    ov.className = 'chat-ov';
+    ov.id = 'gardenOv';
+    ov.innerHTML = `
+      <div class="chat-top">
+        <button class="chat-back" id="gardenBack">←</button>
+        <div class="chat-title">🌷 佩奇的神秘花园</div>
+      </div>
+      <div class="garden-tip">发一条动态，7 天后自动消失，所有人进花园都看得到</div>
+      <div class="chat-body garden-body" id="gardenBody"><p class="muted tiny" style="text-align:center;margin-top:30px">正在走进花园…</p></div>
+      <div class="garden-pend hidden" id="gardenPend">
+        <img id="gardenPendImg" alt=""><button id="gardenPendDel" title="移除图片">✕</button>
+      </div>
+      <div class="chat-input">
+        <button class="garden-pic" id="gardenPic" title="发一张图片">📷</button>
+        <input id="gardenText" maxlength="200" placeholder="和大家分享你的坚持…" autocomplete="off">
+        <button id="gardenSend">发布</button>
+        <input type="file" id="gardenFile" accept="image/*" class="hidden">
+      </div>`;
+    document.body.appendChild(ov);
+    const body = $('#gardenBody');
+
+    const draw = (arr) => {
+      if (!arr.length) { body.innerHTML = '<p class="muted tiny" style="text-align:center;margin-top:30px">还没有动态，第一条由你来发～</p>'; return; }
+      body.innerHTML = arr.map((m) => {
+        const mine = m.uid === c.uid;
+        const who = mine ? { nickname: S.nickname || '我', avatar: S.avatar || '🐣', gender: S.gender, vip: vipOn() } : m;
+        const ts = new Date(m.created_at).getTime();
+        const img = m.img ? `<img class="gd-img" src="${m.img}" alt="" loading="lazy">` : '';
+        const txt = m.body ? `<div class="chat-bub them gd-text">${esc(m.body)}</div>` : '';
+        return `<div class="gd-item${mine ? ' mine' : ''}">
+          <span class="chat-ava">${esc(who.avatar || '🐣')}</span>
+          <div class="msg-col">
+            <div class="chat-who ${mine ? 'r' : ''}">${nameHtml(who)}${genderMark(who.gender)}<span class="gd-left">🌷 ${gardenLeftDays(ts)} 天后消失</span></div>
+            ${txt}${img}
+            ${mine ? '<button class="gd-del" data-id="' + m.id + '">删</button>' : ''}
+          </div>
+        </div>`;
+      }).join('');
+      body.scrollTop = body.scrollHeight;
+      $$('.gd-del').forEach((b) => {
+        b.onclick = async () => {
+          b.disabled = true;
+          try {
+            const r = await sbRpc('pk_garden_delete', { p_uid: c.uid, p_token: c.token, p_id: parseInt(b.dataset.id, 10) });
+            if (r && r.ok) { toast('已从花园删除', '🌷'); load(); }
+            else toast('没删掉，再试一次', '⚠️');
+          } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+        };
+      });
+      $$('.gd-img').forEach((im) => { im.onclick = () => im.classList.toggle('big'); });
+    };
+
+    const load = async () => {
+      try {
+        const arr = await sbRpc('pk_garden_fetch', {});
+        draw(arr || []);
+      } catch (err) {
+        body.innerHTML = '<p class="muted tiny" style="text-align:center;margin-top:30px">花园加载失败，稍后再试</p>';
+      }
+    };
+    load();
+    if (gardenTimer) clearInterval(gardenTimer);
+    gardenTimer = setInterval(load, 15000);
+
+    const setPend = (dataUrl) => {
+      pendingImg = dataUrl || '';
+      const pd = $('#gardenPend'), pi = $('#gardenPendImg'), pc = $('#gardenPic');
+      if (!pd) return;
+      pd.classList.toggle('hidden', !pendingImg);
+      if (pendingImg) pi.src = pendingImg;
+      pc.classList.toggle('has', !!pendingImg);
+    };
+    $('#gardenPendDel').onclick = () => setPend('');
+    $('#gardenPic').onclick = () => $('#gardenFile').click();
+    $('#gardenFile').onchange = (e) => {
+      const f = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (!f) return;
+      if (!/^image\//.test(f.type)) return toast('只能发图片哦', '📷');
+      gardenCompress(f, (dataUrl) => {
+        if (!dataUrl) return toast('图片太大，换一张小点的', '⚠️');
+        setPend(dataUrl);
+        toast('图片已选好，点发布', '📷');
+      });
+    };
+
+    const post = async () => {
+      const el = $('#gardenText');
+      const t = el.value.trim();
+      if (!t && !pendingImg) return toast('写点什么，或加张图片', '🌷');
+      const btn = $('#gardenSend');
+      btn.disabled = true;
+      try {
+        const r = await sbRpc('pk_garden_post', { p_uid: c.uid, p_token: c.token, p_text: t, p_img: pendingImg });
+        if (r && r.ok) {
+          el.value = '';
+          setPend('');
+          toast('动态已发到花园', '🌷');
+          load();
+        } else if (r && r.err === 'img_too_big') { toast('图片太大，换一张小点的', '⚠️'); }
+        else if (r && r.err === 'too_fast') { toast('发得太快啦，休息一下再发', '⏳'); }
+        else { toast('没发出去，再试一次', '⚠️'); }
+      } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+      btn.disabled = false;
+    };
+    $('#gardenSend').onclick = post;
+    $('#gardenText').addEventListener('keydown', (e) => { if (e.key === 'Enter') post(); });
+
+    $('#gardenBack').onclick = () => {
+      if (gardenTimer) { clearInterval(gardenTimer); gardenTimer = null; }
+      ov.remove();
+    };
   }
 
   /* ---------------- 分享 ---------------- */
