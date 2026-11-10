@@ -2384,12 +2384,15 @@
           <button class="menu-row" id="mShare"><span>🔗</span><div><b>分享链接</b><small>复制网页链接或安装包链接</small></div></button>
           <button class="menu-row" id="mVip"><span>🎫</span><div><b>会员中心</b><small>${vipOn() ? '已开通 · 还剩 ' + vipLeftDays() + ' 天' : '购买或兑换开通'}</small></div></button>
           <button class="menu-row" id="mAccount"><span>🔑</span><div><b>${S.acct ? '我的账号' : '账号密码登录'}</b><small>${S.acct ? esc(S.acct) + ' · 换手机可找回记录' : '登录后换手机也能找回打卡记录'}</small></div></button>
+          <button class="menu-row" id="mLang"><span>🌐</span><div><b>Language / 语言</b><small>English · 中文</small></div></button>
           <button class="menu-row danger" id="mLogout"><span>🚪</span><div><b>退出登录</b><small>记录会保留，可重新登录</small></div></button>
         </div>`);
       $('#mShare').onclick = shareSheet;
       $('#mVip').onclick = vipSheet;
       $('#mAccount').onclick = () => { if (S.acct) accountSheet(); else openAcctLogin(); };
       $('#mFriends').onclick = friendsSheet;
+      const ml = $('#mLang');
+      if (ml && window.KKI18N) ml.onclick = () => KKI18N.sheet(sheet, closeSheet);
       $('#mLogout').onclick = logout;
     });
     $('#musicBtn').addEventListener('click', () => {
