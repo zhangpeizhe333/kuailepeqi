@@ -134,7 +134,8 @@
   /* ---------------- 登录 ---------------- */
   function showLogin() { $('#login').classList.remove('hidden'); $('#app').classList.add('hidden'); }
   function openWxAuth() {
-    const ids = Object.keys(DB.accounts);
+    /* 一键登录只列本机微信存档，账号密码注册的账号不在这里显示（走「账号密码登录」按钮） */
+    const ids = Object.keys(DB.accounts).filter((id) => !id.startsWith('acct_'));
     const rows = ids.map((id) => {
       const a = DB.accounts[id];
       return `<div class="wx-account">
@@ -242,7 +243,7 @@
   function acctErrMsg(err, mode) {
     const map = {
       user_taken: '这个账号已经被注册了，换一个吧',
-      bad_user: '账号要 3-16 位字母或数字',
+      bad_user: '账号要 6-16 位字母或数字',
       bad_pass: mode === 'login' ? '密码不对，再想想' : '密码至少 6 位',
       no_user: '没有这个账号，切到「注册新账号」吧',
       locked: '密码错太多次了，10 分钟后再试',
@@ -258,7 +259,7 @@
       </div>
       <div class="form">
         <label>账号</label>
-        <input id="acctUser" maxlength="16" placeholder="3-16 位字母或数字" autocomplete="username" value="${esc(prefill || '')}">
+        <input id="acctUser" maxlength="16" placeholder="6-16 位字母或数字" autocomplete="username" value="${esc(prefill || '')}">
         <label>密码</label>
         <input id="acctPass" type="password" maxlength="32" placeholder="至少 6 位" autocomplete="current-password">
         <div id="acctNickWrap" class="hidden"><label>昵称</label>
@@ -278,7 +279,7 @@
     const submit = async () => {
       const user = $('#acctUser').value.trim().toLowerCase();
       const pass = $('#acctPass').value;
-      if (!/^[a-z0-9_]{3,16}$/.test(user)) return toast('账号要 3-16 位字母或数字', '🔑');
+      if (!/^[a-z0-9_]{6,16}$/.test(user)) return toast('账号要 6-16 位字母或数字', '🔑');
       if (pass.length < 6) return toast('密码至少 6 位', '🔒');
       go.disabled = true;
       try {
@@ -320,23 +321,8 @@
       <p class="sheet-sub">当前账号：${esc(S.acct)} · 换手机登录这个账号就能找回记录</p>
       <div class="sheet-actions col">
         <button class="btn btn-primary btn-lg" id="acctPwd">修改密码</button>
-        <button class="btn btn-ghost btn-lg" id="acctOut">退出账号</button>
       </div>`);
     $('#acctPwd').onclick = acctChangePass;
-    $('#acctOut').onclick = () => {
-      sheet(`<h3>退出账号？</h3>
-        <p class="sheet-sub">退出后本机的打卡记录还在，可以继续用；下次登录账号即可恢复云端记录。</p>
-        <div class="sheet-actions">
-          <button class="btn btn-ghost" id="aoNo">取消</button>
-          <button class="btn btn-danger" id="aoYes">退出账号</button>
-        </div>`);
-      $('#aoNo').onclick = accountSheet;
-      $('#aoYes').onclick = () => {
-        S.acct = ''; S.cloud = null;
-        persist(); closeSheet(); render();
-        toast('已退出账号，本机记录保留', '👋');
-      };
-    };
   }
 
   function logout() {
@@ -1924,7 +1910,8 @@
       dmLatest = arr || [];
       if (!S.dmRead || typeof S.dmRead !== 'object') S.dmRead = {};
       const unread = dmLatest.filter((m) => (S.dmRead[m.sender] || 0) < m.mid).length;
-      bell.classList.toggle('hidden', !dmLatest.length);
+      /* 信封常驻显示，有新消息才闪烁 + 显示红点数字 */
+      bell.classList.remove('hidden');
       bell.classList.toggle('dm-blink', unread > 0);
       bell.dataset.n = unread;
     } catch (err) { /* 静默 */ }
