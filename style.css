@@ -690,11 +690,14 @@ h3 small { font-weight: 400; }
 .g-mark { font-style: normal; font-size: 10px; padding: 1px 5px; border-radius: 6px; vertical-align: 1px; }
 .g-boy { color: #8fc7ff; background: rgba(143, 199, 255, .14); }
 .g-girl { color: #ff9ec4; background: rgba(255, 158, 196, .14); }
-.fr-btn { min-width: 62px; text-align: center; white-space: nowrap; }
-.fr-acts { display: flex; gap: 5px; flex: none; flex-wrap: nowrap; justify-content: flex-end; }
+.fr-btn { min-width: 50px; padding: 6px 7px; font-size: 11.5px; text-align: center; white-space: nowrap; }
+.fr-acts { display: flex; gap: 4px; flex: none; flex-wrap: nowrap; justify-content: flex-end; }
 .fr-main { min-width: 0; flex: 1; display: flex; flex-direction: column; }
-.fr-line1 { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.fr-line1 { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
 .fr-line1 > b { font-size: 14.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr-line1 > b.fn { display: flex; align-items: center; gap: 3px; flex: 1 1 auto; min-width: 0; overflow: visible; }
+.fr-line1 > b.fn .fn-t { min-width: 45px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr-line1 > b.fn .vip-mini { flex: none; }
 .fr-days { margin-top: 6px; font-size: 11.5px; color: var(--muted); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .mk-cnt { color: var(--muted); font-weight: 400; }
 
@@ -729,6 +732,16 @@ h3 small { font-weight: 400; }
 /* ===== 顶栏私信铃铛 ===== */
 #dmBell { position: relative; }
 .dm-latest { display: flex; flex-direction: column; gap: 8px; }
+/* 私信列表行：左侧点开聊天，右侧删除 */
+.dm-row { display: flex; align-items: center; gap: 8px; }
+.dm-open {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
+  text-align: left; background: none; border: 0; padding: 0; color: inherit; font: inherit;
+}
+.dm-del {
+  flex: none; width: 36px; height: 36px; border-radius: 10px; font-size: 15px; line-height: 1;
+  color: var(--muted); background: rgba(255, 255, 255, .06); border: 1px solid var(--line);
+}
 .dm-dot {
   flex: none; font-size: 10px; font-weight: 700; color: #fff;
   background: #e35d6a; border-radius: 8px; padding: 2px 7px; align-self: center;
