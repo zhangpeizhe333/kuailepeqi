@@ -147,11 +147,11 @@
         <button class="wx-del" data-del="${id}" title="删除这条登录记录">✕</button>
       </div>`;
     }).join('');
-    sheet(`<h3>选择存档</h3>
+    sheet(`<h3>一键登录</h3>
       <p class="sheet-sub">每个存档独立记录，换存档就是换一份坚持</p>
       <div class="wx-accounts">${rows || '<p class="muted tiny" style="text-align:center;padding:10px 0">还没有登录记录，新建一个吧</p>'}</div>
       <button class="wx-new" id="wxNew"><span>＋</span>新建一个存档</button>
-`);
+      <p class="muted tiny" style="text-align:center;margin-top:12px">每个存档相互独立，换一个就是换一份坚持</p>`);
     $$('.wx-pick').forEach((b) => b.addEventListener('click', () => {
       const acc = DB.accounts[b.dataset.wx];
       if (acc && acc.acct) { closeSheet(); return openAcctLogin(acc.acct); }
@@ -1504,7 +1504,7 @@
           <div><b>${esc(S.vip.plan || '会员')} · 生效中</b>
           <small>有效期至 ${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 · ${leftTxt}</small></div>
         </div>
-        <p class="muted tiny" style="text-align:center;margin:10px 0 0">续费方案见下方 · 兑换码可在 App Store 活动中获得</p>
+        <p class="muted tiny" style="text-align:center;margin:10px 0 0">续费方案见下方 · 兑换码由活动发放</p>
         <div class="vip-perk">
           <div><span>📝</span><b>每天免费抽 1 张小纸条</b></div>
           <div><span>📅</span><b>可自行设置打卡开始时间</b></div>
@@ -1536,7 +1536,6 @@
         <button class="vip-buy" data-sku="vip_year"><b>¥88</b><small>/ 年</small></button>
         <button class="vip-buy" data-sku="vip_forever"><b>¥188</b><small>/ 永久</small></button>
       </div>
-      <p class="iap-note">价格与结算由 App Store 完成 · 一次购买对应时长，不自动续费</p>
       <div class="vip-perk">
         <div><span>📝</span><b>每天免费抽 1 张小纸条</b></div>
         <div><span>📅</span><b>可自行设置打卡开始时间</b></div>
@@ -1549,7 +1548,7 @@
         <button class="btn btn-ghost btn-lg" id="vipRestore2">恢复购买</button>
         <button class="btn btn-ghost btn-lg" id="vipCancel">${hasCode ? '先不续' : '先看看'}</button>
       </div>
-      <p class="muted tiny" style="text-align:center;margin-top:10px">兑换码由 App Store 活动发放 · 也可以直接点上方方案购买</p>`);
+      <p class="muted tiny" style="text-align:center;margin-top:10px">兑换码由活动发放 · 也可以直接点上方方案购买</p>`);
 
     const act = async () => {
       const el = $('#vipCode');
