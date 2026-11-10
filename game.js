@@ -163,21 +163,42 @@
     $$('.wx-del').forEach((b) => b.addEventListener('click', () => delAccount(b.dataset.del)));
     $('#wxNew').onclick = openRegForm;
   }
+  /* 删除登录记录时同步清除云端资料：好友搜索、好友列表、社区成员都会一起消失。
+     云端函数 pk_delete_account 未部署时，退一步把昵称改成「已注销xxxx」，至少搜不到旧昵称 */
+  async function purgeCloud(acc) {
+    const cl = acc && acc.cloud;
+    if (!cl || !cl.uid || !cl.token) return true;
+    try {
+      const r = await sbRpc('pk_delete_account', { p_uid: cl.uid, p_token: cl.token });
+      if (r && r.ok) return true;
+    } catch (e) { /* 函数未部署 / 网络异常，走下面的兜底 */ }
+    try {
+      const tag = String(cl.uid).slice(-4);
+      await sbRpc('pk_upsert', {
+        p_uid: cl.uid, p_token: cl.token, p_nick: '已注销' + tag, p_avatar: '🐣',
+        p_smoke: 0, p_alcohol: 0, p_fit: 0, p_gender: '', p_vip: false,
+      });
+    } catch (e2) {}
+    return false;
+  }
   function delAccount(id) {
     const a = DB.accounts[id];
     if (!a) return openWxAuth();
     sheet(`<h3>删除这条登录记录？</h3>
-      <p class="sheet-sub">「${esc(a.nickname || '玩家')}」的打卡记录、积分、小纸条和小秘密都会被删除，无法恢复。</p>
+      <p class="sheet-sub">「${esc(a.nickname || '玩家')}」的打卡记录、积分、小纸条都会被删除，无法恢复。<br>云端好友资料也会一起清除，好友将搜不到这个账号。</p>
       <div class="sheet-actions">
         <button class="btn btn-ghost" id="delNo">取消</button>
         <button class="btn btn-danger" id="delYes">删除记录</button>
       </div>`);
     $('#delNo').onclick = openWxAuth;
-    $('#delYes').onclick = () => {
+    $('#delYes').onclick = async () => {
+      const btn = $('#delYes');
+      btn.disabled = true; btn.textContent = '正在清除…';
+      await purgeCloud(DB.accounts[id]);
       delete DB.accounts[id];
       if (DB.current === id) DB.current = null;
       persist(); closeSheet();
-      toast('已删除该登录记录', '🗑️');
+      toast('已删除该登录记录和云端资料', '🗑️');
       setTimeout(openWxAuth, 200);
     };
   }
