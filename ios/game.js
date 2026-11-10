@@ -857,43 +857,110 @@
     return `⏰ 距离目标还剩 ${d}天${h}小时${m}分`;
   }
 
+  /* 小闹钟：自绘日历 + 时分步进器，网页 / 安卓 App / iOS 三端完全一致。
+     不用系统原生 datetime 选择器——各端弹的界面都不同，安卓 WebView 里还会闪退，
+     原生选择器自带的「清除」键也一并去掉。 */
   function openClock() {
     if (!S.clock || typeof S.clock !== 'object') S.clock = { target: 0 };
-    const cur = S.clock.target;
-    const d = cur > Date.now() ? new Date(cur) : new Date(Date.now() + 100 * 86400000);
+    const base = S.clock.target > Date.now() ? new Date(S.clock.target) : new Date(Date.now() + 100 * 86400000);
     const pad = (n) => String(n).padStart(2, '0');
-    const val = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const WK = ['日', '一', '二', '三', '四', '五', '六'];
+    const pick = { y: base.getFullYear(), m: base.getMonth(), d: base.getDate(), h: base.getHours(), mi: base.getMinutes() };
+    const view = { y: pick.y, m: pick.m };
+    const today0 = new Date(); today0.setHours(0, 0, 0, 0);
+
+    const sumText = () => `${pick.y} 年 ${pick.m + 1} 月 ${pick.d} 日 周${WK[new Date(pick.y, pick.m, pick.d).getDay()]} · ${pad(pick.h)}:${pad(pick.mi)}`;
+
+    const calHtml = () => {
+      const days = new Date(view.y, view.m + 1, 0).getDate();
+      const lead = (new Date(view.y, view.m, 1).getDay() + 6) % 7; /* 周一开头 */
+      let cells = ['一', '二', '三', '四', '五', '六', '日'].map((w) => `<i class="cal-cell cal-w">${w}</i>`).join('');
+      for (let i = 0; i < lead; i++) cells += '<i class="cal-cell empty"></i>';
+      for (let d = 1; d <= days; d++) {
+        const sel = view.y === pick.y && view.m === pick.m && d === pick.d;
+        const past = new Date(view.y, view.m, d).getTime() < today0.getTime();
+        cells += `<i class="cal-cell${sel ? ' sel' : ''}${past ? ' dis' : ''}" data-cd="${d}">${d}</i>`;
+      }
+      const canPrev = new Date(view.y, view.m, 1).getTime() > today0.getTime();
+      return `<div class="cal-box ck-cal">
+        <div class="cal-head">
+          <button class="cal-nav" data-ckm="-1"${canPrev ? '' : ' disabled'}>‹</button>
+          <b>${view.y} 年 ${view.m + 1} 月</b>
+          <button class="cal-nav" data-ckm="1">›</button>
+        </div>
+        <div class="cal-grid">${cells}</div>
+      </div>`;
+    };
+
     sheet(`<h3>⏰ 小闹钟</h3>
       <p class="sheet-sub">定一个目标时间，页面顶部会一直显示倒计时</p>
-      <div class="form">
-        <label>目标时间</label>
-        <input id="clockTime" type="datetime-local" value="${val}">
-        <div class="clock-presets">
-          <button class="btn btn-ghost" data-p="7">7 天</button>
-          <button class="btn btn-ghost" data-p="30">30 天</button>
-          <button class="btn btn-ghost" data-p="100">100 天</button>
-        </div>
+      <div class="ck-sum" id="ckSum">${sumText()}</div>
+      <div class="clock-presets">
+        <button class="btn btn-ghost" data-p="7">7 天后</button>
+        <button class="btn btn-ghost" data-p="30">30 天后</button>
+        <button class="btn btn-ghost" data-p="100">100 天后</button>
+      </div>
+      <p class="ck-label">选日期</p>
+      <div id="ckCal">${calHtml()}</div>
+      <p class="ck-label">选时间</p>
+      <div class="ck-time">
+        <div class="ck-step"><button data-ck="h-1" aria-label="小时减">−</button><b id="ckH">${pad(pick.h)}</b><span class="ck-unit">时</span><button data-ck="h1" aria-label="小时加">＋</button></div>
+        <div class="ck-step"><button data-ck="m-5" aria-label="分钟减">−</button><b id="ckM">${pad(pick.mi)}</b><span class="ck-unit">分</span><button data-ck="m5" aria-label="分钟加">＋</button></div>
       </div>
       <div class="sheet-actions">
-        ${cur ? '<button class="btn btn-ghost" id="clockDel">删除闹钟</button>' : '<button class="btn btn-ghost" id="clockNo">取消</button>'}
+        <button class="btn btn-ghost" id="clockNo">取消</button>
         <button class="btn btn-primary" id="clockSave">保存</button>
       </div>`);
+
+    const bindCal = () => {
+      $$('.ck-cal .cal-nav').forEach((b) => b.onclick = () => {
+        const t = new Date(view.y, view.m + (+b.dataset.ckm), 1);
+        view.y = t.getFullYear(); view.m = t.getMonth();
+        $('#ckCal').innerHTML = calHtml();
+        bindCal();
+      });
+      $$('.ck-cal .cal-cell[data-cd]').forEach((el) => el.onclick = () => {
+        if (el.classList.contains('dis')) return;
+        pick.y = view.y; pick.m = view.m; pick.d = +el.dataset.cd;
+        $('#ckCal').innerHTML = calHtml();
+        bindCal();
+        $('#ckSum').textContent = sumText();
+      });
+    };
+    bindCal();
+
     $$('.clock-presets .btn').forEach((b) => b.onclick = () => {
       const t = new Date(Date.now() + parseInt(b.dataset.p, 10) * 86400000);
-      $('#clockTime').value = `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}T${pad(t.getHours())}:${pad(t.getMinutes())}`;
+      pick.y = t.getFullYear(); pick.m = t.getMonth(); pick.d = t.getDate();
+      pick.h = t.getHours(); pick.mi = t.getMinutes();
+      view.y = pick.y; view.m = pick.m;
+      $('#ckCal').innerHTML = calHtml();
+      bindCal();
+      $('#ckSum').textContent = sumText();
+      $('#ckH').textContent = pad(pick.h);
+      $('#ckM').textContent = pad(pick.mi);
     });
+
+    $$('.ck-step button').forEach((b) => b.onclick = () => {
+      const k = b.dataset.ck;
+      if (k === 'h-1') pick.h = (pick.h + 23) % 24;
+      else if (k === 'h1') pick.h = (pick.h + 1) % 24;
+      else if (k === 'm-5') pick.mi = (pick.mi + 55) % 60;
+      else pick.mi = (pick.mi + 5) % 60;
+      $('#ckH').textContent = pad(pick.h);
+      $('#ckM').textContent = pad(pick.mi);
+      $('#ckSum').textContent = sumText();
+    });
+
     $('#clockSave').onclick = () => {
-      const t = new Date($('#clockTime').value).getTime();
+      const t = new Date(pick.y, pick.m, pick.d, pick.h, pick.mi).getTime();
       if (!t || t <= Date.now()) return toast('要定一个将来的时间哦', '⏰');
       S.clock.target = t;
       persist(); closeSheet();
       toast('小闹钟设好啦', '⏰');
       renderPeki();
     };
-    const cNo = $('#clockNo');
-    if (cNo) cNo.onclick = closeSheet;
-    const cDel = $('#clockDel');
-    if (cDel) cDel.onclick = () => { S.clock.target = 0; persist(); closeSheet(); renderPeki(); };
+    $('#clockNo').onclick = closeSheet;
   }
 
   function spawnCat() {
