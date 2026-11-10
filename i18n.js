@@ -491,6 +491,7 @@
     '操作失败，稍后再试': 'Something went wrong — try later',
     '没发出去，再试一次': "Couldn't send — try again",
     '网络不太顺，再试一次': 'Poor network — try again',
+    '你 3 天没进群被移出了，已自动重新进群': 'You were away 3+ days and got removed — rejoined automatically',
     '没删掉，再试一次': "Couldn't delete — try again",
     '没改成，稍后再试': "Couldn't change — try later",
     '安装包下载到手机，装好就是原生应用': 'Downloads the APK — install it as a native app',
