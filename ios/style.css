@@ -961,6 +961,46 @@ h3 small { font-weight: 400; }
   60% { transform: scale(1); }
 }
 
+/* 佩奇的神秘花园（公共动态 · 7 天自动过期） */
+.garden-btn { margin-top: 12px; }
+.garden-tip {
+  flex: none; padding: 8px 14px; font-size: 11.5px; line-height: 1.5; color: var(--muted);
+  background: rgba(255, 212, 121, .07); border-top: 1px solid var(--line); text-align: center;
+}
+.garden-body { background: linear-gradient(180deg, rgba(94, 195, 138, .06), rgba(255, 212, 121, .05)); }
+.gd-item { display: flex; gap: 6px; align-items: flex-start; margin-bottom: 14px; max-width: 94%; }
+.gd-item.mine { margin-left: auto; flex-direction: row-reverse; }
+.gd-text { white-space: pre-wrap; }
+.gd-img {
+  display: block; max-width: 190px; max-height: 190px; width: auto; border-radius: 12px;
+  border: 1px solid var(--line); margin-top: 6px; cursor: zoom-in; background: rgba(255,255,255,.06);
+}
+.gd-img.big { max-width: 86%; max-height: none; width: 86%; height: auto; cursor: zoom-out; }
+.gd-left { font-size: 10px; color: var(--muted); margin-left: 8px; font-weight: 400; }
+.gd-del {
+  margin-top: 5px; padding: 2px 10px; border-radius: 999px; font-size: 11px;
+  color: var(--muted); background: rgba(255, 255, 255, .06); border: 1px solid var(--line);
+}
+.garden-pend {
+  flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px 0;
+  border-top: 1px solid var(--line);
+}
+.garden-pend.hidden { display: none; }
+.garden-pend img {
+  width: 46px; height: 46px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line);
+}
+.garden-pend button {
+  padding: 4px 9px; border-radius: 999px; font-size: 12px; color: var(--muted);
+  background: rgba(255, 255, 255, .07); border: 1px solid var(--line);
+}
+.chat-input .garden-pic {
+  width: 44px; padding: 0; font-size: 17px; line-height: 1;
+  background: rgba(255, 255, 255, .08); border: 1px solid var(--line);
+  color: var(--text); transition: transform .12s, background .12s;
+}
+.chat-input .garden-pic:active { transform: scale(.93); }
+.chat-input .garden-pic.has { background: linear-gradient(135deg, #ffe9a8, #efbb45); }
+
 /* 修改昵称 · 聊天头像（会员可自选） */
 .ava-pick { margin-top: 14px; }
 .ava-pick-head { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
