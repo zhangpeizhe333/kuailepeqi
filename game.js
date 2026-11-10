@@ -1369,6 +1369,12 @@
         return toast('激活码不对，检查一下有没有输错', '⚠️');
       }
       const norm = String(el.value).toUpperCase().replace(/[^0-9A-Z]/g, '');
+      /* 本机已用过的码，直接拒绝，不再请求云端 */
+      if (S.vip && S.vip.code === norm) {
+        el.classList.add('shake');
+        setTimeout(() => el.classList.remove('shake'), 600);
+        return toast('这个激活码你已经用过了，每个码只能用一次', '🚫');
+      }
       const btn = $('#vipAct');
       btn.disabled = true;
       try {
@@ -1805,7 +1811,6 @@
     if (!dmLatest.length) return toast('还没有收到私信', '✉️');
     if (!S.dmRead || typeof S.dmRead !== 'object') S.dmRead = {};
     sheet(`<h3>✉️ 私信</h3>
-      <p class="sheet-sub">点好友进聊天；点右边「删」只删自己这边的记录，对方还能看到</p>
       <div class="dm-latest">${dmLatest.map((m) => {
         const unread = (S.dmRead[m.sender] || 0) < m.mid;
         return `<div class="fr-row dm-row">
@@ -1830,7 +1835,7 @@
         const peer = dmLatest.find((m) => m.sender === b.dataset.dmdel);
         if (!peer) return;
         sheet(`<h3>删除聊天记录</h3>
-          <p class="sheet-sub">只会删除你自己这边的记录，和「${esc(peer.nickname)}」的聊天会从私信列表消失，对方那边不受影响。确定删除吗？</p>
+          <p class="sheet-sub">只会删除你自己这边的记录，和「${esc(peer.nickname)}」的聊天会从私信列表消失。确定删除吗？</p>
           <div class="sheet-actions">
             <button class="btn btn-ghost" id="dmDelNo">再想想</button>
             <button class="btn btn-primary" id="dmDelYes">确认删除</button>
