@@ -1938,8 +1938,8 @@
     return `<div class="fr-row">
       <span class="fr-ava">${esc(p.avatar || '🐣')}</span>
       <div class="fr-main">
-        <div class="fr-line1">${nm}${act || ''}</div>
-        <div class="fr-days">${genderMark(p.gender)} ${t.length ? t.join('　') : '<span>还没开始打卡</span>'}</div>
+        <div class="fr-line1">${nm}</div>
+        <div class="fr-line2"><div class="fr-days">${genderMark(p.gender)} ${t.length ? t.join('　') : '<span>还没开始打卡</span>'}</div>${act || ''}</div>
       </div>
     </div>`;
   }
