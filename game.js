@@ -1805,7 +1805,7 @@
     if (!dmLatest.length) return toast('还没有收到私信', '✉️');
     if (!S.dmRead || typeof S.dmRead !== 'object') S.dmRead = {};
     sheet(`<h3>✉️ 私信</h3>
-      <p class="sheet-sub">点好友进聊天；点右边 🗑 只删自己这边的记录，对方还能看到</p>
+      <p class="sheet-sub">点好友进聊天；点右边「删」只删自己这边的记录，对方还能看到</p>
       <div class="dm-latest">${dmLatest.map((m) => {
         const unread = (S.dmRead[m.sender] || 0) < m.mid;
         return `<div class="fr-row dm-row">
@@ -1814,7 +1814,7 @@
             <div class="fr-info"><b class="${m.vip ? 'vip-name' : ''}">${esc(m.nickname)}${m.vip ? ' <span class="vip-mini">VIP</span>' : ''}</b><small>${genderMark(m.gender)} ${esc(m.body).slice(0, 24)}</small></div>
             ${unread ? '<span class="dm-dot">新</span>' : ''}
           </button>
-          <button class="dm-del" data-dmdel="${esc(m.sender)}" title="删除聊天记录">🗑</button>
+          <button class="dm-del" data-dmdel="${esc(m.sender)}" title="删除聊天记录">删</button>
         </div>`;
       }).join('')}</div>`);
     $$('[data-dml]').forEach((b) => {
@@ -1829,7 +1829,7 @@
       b.onclick = () => {
         const peer = dmLatest.find((m) => m.sender === b.dataset.dmdel);
         if (!peer) return;
-        sheet(`<h3>🗑 删除聊天记录</h3>
+        sheet(`<h3>删除聊天记录</h3>
           <p class="sheet-sub">只会删除你自己这边的记录，和「${esc(peer.nickname)}」的聊天会从私信列表消失，对方那边不受影响。确定删除吗？</p>
           <div class="sheet-actions">
             <button class="btn btn-ghost" id="dmDelNo">再想想</button>
@@ -1845,7 +1845,7 @@
               dmLatest = dmLatest.filter((x) => x.sender !== peer.sender);
               await dmCheck();
               if (dmLatest.length) dmBellSheet();
-              else { closeSheet(); toast('聊天记录已删除', '🗑'); }
+              else { closeSheet(); toast('聊天记录已删除', '✅'); }
             } else { dmBellSheet(); toast('没删掉，再试一次', '⚠️'); }
           } catch (err) { dmBellSheet(); toast('网络不太顺，再试一次', '📡'); }
         };
