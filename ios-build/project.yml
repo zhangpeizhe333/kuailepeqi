@@ -1,0 +1,53 @@
+# Xcode 工程描述（xcodegen）
+# 用法：cd ios-build && xcodegen generate
+# 好处：不用手写 .pbxproj，也不用打开 Xcode 就能维护工程；
+#       GitHub Actions 的 macOS 机器会在打包时自动生成 .xcodeproj。
+#
+# TEAM_ID_PLACEHOLDER 是占位符，CI 打包时会自动换成你的真实 Team ID。
+name: KuailePeqi
+
+options:
+  deploymentTarget:
+    iOS: "16.0"
+  generateEmptyDirectories: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1"          # 仅 iPhone，减少截图尺寸要求
+    GENERATE_INFOPLIST_FILE: "NO"        # 用下面显式的 Info.plist
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: TEAM_ID_PLACEHOLDER
+    PRODUCT_BUNDLE_IDENTIFIER: com.zhangpeizhe.kuailepeqi
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_EMIT_LOC_STRINGS: "YES"
+
+targets:
+  KuailePeqi:
+    type: application
+    platform: iOS
+    infoPlist: Info.plist
+    sources:
+      - path: ../ios/native/AppShell.swift
+      - path: ../ios/native/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      - path: Assets.xcassets
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.zhangpeizhe.kuailepeqi
+        DEVELOPMENT_TEAM: TEAM_ID_PLACEHOLDER
+        CODE_SIGN_STYLE: Automatic
+
+schemes:
+  KuailePeqi:
+    build:
+      targets:
+        KuailePeqi: all
+    archive:
+      config: Release
+    profile:
+      config: Release
