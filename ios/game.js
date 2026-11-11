@@ -291,7 +291,9 @@
     acc.cloud = { uid: r.uid, token: r.token };
     if (r.rec_code) acc.recCode = r.rec_code;
     if (r.vip && (!acc.vip || (acc.vip.until || 0) < Date.now())) {
-      acc.vip = { until: Date.now() + 30 * DAY, plan: '找回恢复', code: '' };
+      /* 云端有精确到期时间就按它还原（客服设几天就是几天），老数据退回 30 天 */
+      const vu = r.vip_until ? Date.parse(r.vip_until) : 0;
+      acc.vip = { until: vu > Date.now() ? vu : Date.now() + 30 * DAY, plan: '找回恢复', code: '' };
     }
     acc.acct = acc.acct || '';
     DB.accounts[key] = acc;
@@ -1621,16 +1623,12 @@
       <div class="garden-tip">发一条动态，7 天后自动消失，所有人进花园都看得到</div>
       <div class="chat-body garden-body" id="gardenBody"><p class="muted tiny" style="text-align:center;margin-top:30px">正在走进花园…</p></div>
       <div class="garden-pend hidden" id="gardenPend"></div>
-      <div class="pic-choose hidden" id="picChoose">
-        <button id="picTake">📸 拍照</button>
-        <button id="picAlbum">🖼️ 从手机相册选择</button>
-      </div>
       <div class="chat-input">
-        <button class="garden-pic" id="gardenPic" title="添加照片">📷</button>
+        <label class="garden-pic" id="gardenPic" title="添加照片">📷
+          <input type="file" id="gardenFile" accept="image/*" class="file-real">
+        </label>
         <input id="gardenText" maxlength="200" placeholder="和大家分享你的坚持…" autocomplete="off">
         <button id="gardenSend">发布</button>
-        <input type="file" id="gardenFileCam" accept="image/*" capture="environment" class="file-off">
-        <input type="file" id="gardenFileAlbum" accept="image/*" class="file-off">
       </div>`;
     document.body.appendChild(ov);
     const body = $('#gardenBody');
@@ -1656,25 +1654,24 @@
         const textHtml = m.body
           ? `<div class="gd-text">${foldHtml(m.body, 'p' + m.id)}</div>` : '';
         const liked = (m.likers || []).includes(c.uid);
-        const list = (byPost[m.id] || []).slice().sort((x, y) => (y.likes - x.likes) || (new Date(y.created_at) - new Date(x.created_at)));
+        /* 评论按回复时间正序（先发的在上面），最多显示 3 条 */
+        const list = (byPost[m.id] || []).slice().sort((x, y) => new Date(x.created_at) - new Date(y.created_at));
         const showAll = cmtAll.has(m.id);
-        const shown = showAll ? list : list.slice(0, 5);
+        const shown = showAll ? list : list.slice(0, 3);
         const cmtHtml = shown.map((cm) => {
           const cmine = cm.uid === c.uid;
           const cwho = cmine ? { nickname: S.nickname || '我', avatar: S.avatar || '🐣', gender: S.gender, vip: vipOn() } : cm;
-          const cliked = (cm.likers || []).includes(c.uid);
           return `<div class="gd-cmt${cmine ? ' mine' : ''}">
             <span class="cmt-ava">${esc(cwho.avatar || '🐣')}</span>
             <div class="cmt-col">
               <div class="cmt-who">${nameHtml(cwho)}${genderMark(cwho.gender)}</div>
               <div class="cmt-bub">${foldHtml(cm.body, 'c' + cm.id)}</div>
             </div>
-            <button class="gd-clike${cliked ? ' on' : ''}" data-clike="${cm.id}">👍${cm.likes ? ' ' + cm.likes : ''}</button>
             ${cmine ? `<button class="gd-del" data-cdel="${cm.id}">删</button>` : ''}
           </div>`;
         }).join('');
-        const more = !showAll && list.length > 5
-          ? `<button class="gd-more" data-more="${m.id}">查看更多评论（${list.length - 5}）</button>` : '';
+        const more = !showAll && list.length > 3
+          ? `<button class="gd-more" data-more="${m.id}">查看更多评论（${list.length - 3}）</button>` : '';
         const cmtRow = cmtOpen.has(m.id)
           ? `<div class="gd-cmtrow" data-crow="${m.id}">
               <input maxlength="100" placeholder="说点什么…" autocomplete="off">
@@ -1684,11 +1681,13 @@
           <span class="chat-ava">${esc(who.avatar || '🐣')}</span>
           <div class="msg-col">
             <div class="chat-who ${mine ? 'r' : ''}">${nameHtml(who)}${genderMark(who.gender)}<span class="gd-left">🌷 ${gardenLeftDays(ts)} 天后消失</span></div>
-            <div class="gd-post">${textHtml}${imgHtml}
-              <div class="gd-actions">
-                <button class="gd-like${liked ? ' on' : ''}" data-like="${m.id}">👍${m.likes ? ' ' + m.likes : ''}</button>
-                <button class="gd-cmtbtn" data-cbtn="${m.id}">💬${list.length ? ' ' + list.length : ''}</button>
-                ${mine ? `<button class="gd-del" data-id="${m.id}">删</button>` : ''}
+            <div class="gd-post">
+              <div class="gd-core">${textHtml}${imgHtml}
+                <div class="gd-actions">
+                  <button class="gd-like${liked ? ' on' : ''}" data-like="${m.id}">👍${m.likes ? ' ' + m.likes : ''}</button>
+                  <button class="gd-cmtbtn" data-cbtn="${m.id}">💬${list.length ? ' ' + list.length : ''}</button>
+                  ${mine ? `<button class="gd-del" data-id="${m.id}">删</button>` : ''}
+                </div>
               </div>
               <div class="gd-cmts">${cmtHtml}${more}${cmtRow}</div>
             </div>
@@ -1714,16 +1713,6 @@
           bt.disabled = true;
           try {
             const r = await sbRpc('pk_garden_like', { p_uid: c.uid, p_token: c.token, p_kind: 'post', p_id: parseInt(bt.dataset.like, 10) });
-            if (r && r.ok) load(); else toast('没点上，再试一次', '⚠️');
-          } catch (err) { toast('网络不太顺，再试一次', '📡'); }
-        };
-      });
-      /* 点赞评论 */
-      $$('.gd-clike').forEach((bt) => {
-        bt.onclick = async () => {
-          bt.disabled = true;
-          try {
-            const r = await sbRpc('pk_garden_like', { p_uid: c.uid, p_token: c.token, p_kind: 'cmt', p_id: parseInt(bt.dataset.clike, 10) });
             if (r && r.ok) load(); else toast('没点上，再试一次', '⚠️');
           } catch (err) { toast('网络不太顺，再试一次', '📡'); }
         };
@@ -1813,14 +1802,8 @@
         toast('图片已选好，点发布', '📷');
       });
     };
-    /* 点 📷 弹出选择条：拍照 / 手机相册 */
-    const picCh = $('#picChoose');
-    $('#gardenPic').onclick = () => picCh.classList.toggle('hidden');
-    $('#picTake').onclick = () => { picCh.classList.add('hidden'); $('#gardenFileCam').click(); };
-    $('#picAlbum').onclick = () => { picCh.classList.add('hidden'); $('#gardenFileAlbum').click(); };
-    ['#gardenFileCam', '#gardenFileAlbum'].forEach((sel) => {
-      $(sel).onchange = (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; addFile(f); };
-    });
+    /* 点 📷 直接调起系统相机 / 媒体选择工具（安卓 App 由 WebChromeClient 接管） */
+    $('#gardenFile').onchange = (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; addFile(f); };
 
     const post = async () => {
       const el = $('#gardenText');
@@ -2282,11 +2265,19 @@
   }
   async function sbSync() {
     const c = cloudId(), d = myDays();
-    return sbRpc('pk_upsert', {
+    const base = {
       p_uid: c.uid, p_token: c.token, p_nick: String(S.nickname || '匿名玩家').slice(0, 20),
       p_avatar: S.avatar || '🐣', p_smoke: d.smoke, p_alcohol: d.alcohol, p_fit: d.fit,
       p_gender: S.gender === 'girl' ? 'girl' : 'boy', p_vip: vipOn(),
-    });
+    };
+    /* 云端升级过 pk_upsert 才认 p_vip_until；没升级就自动回退，保证资料同步不中断 */
+    try {
+      const r = await sbRpc('pk_upsert', Object.assign({}, base, {
+        p_vip_until: vipOn() ? new Date(S.vip.until).toISOString() : null,
+      }));
+      if (r) return r;
+    } catch (err) { /* 老函数不接受新参数，走下面的兼容调用 */ }
+    return sbRpc('pk_upsert', base);
   }
   /* VIP 专属红心：消息体沿用旧标记 [[FLOWER]]，历史消息同样显示成红心 */
   const FLOWER = '[[FLOWER]]';
