@@ -51,8 +51,8 @@ h3 small { font-weight: 400; }
 .btn:active { transform: scale(.97); }
 .btn-primary {
   -webkit-appearance: none !important; appearance: none !important;
-  background-color: #ffc85a !important;   /* 纯亮黄兜底：渐变被忽略时底色依然鲜明 */
-  background-image: linear-gradient(135deg, #ffe19c, #ffb43d) !important;
+  background-color: #ffd06a !important;   /* 纯亮黄兜底：渐变被忽略时底色依然鲜明 */
+  background-image: linear-gradient(135deg, #fff0c2, #ffc24f) !important;
   color: #3d2808 !important; -webkit-text-fill-color: #3d2808 !important;
   opacity: 1 !important; filter: none !important;
   forced-color-adjust: none !important; color-scheme: light !important;
@@ -69,8 +69,8 @@ h3 small { font-weight: 400; }
 .btn-primary:disabled, .btn-primary[disabled],
 .act.primary:disabled, .act.primary[disabled] {
   -webkit-appearance: none !important; appearance: none !important;
-  background-color: #ffc85a !important;
-  background-image: linear-gradient(135deg, #ffe19c, #ffb43d) !important;
+  background-color: #ffd06a !important;
+  background-image: linear-gradient(135deg, #fff0c2, #ffc24f) !important;
   color: #3d2808 !important; -webkit-text-fill-color: #3d2808 !important;
   opacity: .92 !important; filter: none !important;
   forced-color-adjust: none !important; color-scheme: light !important;
@@ -312,8 +312,8 @@ h3 small { font-weight: 400; }
 .act:active { transform: scale(.96); }
 .act.primary {
   -webkit-appearance: none !important; appearance: none !important;
-  background-color: #ffc85a !important;
-  background-image: linear-gradient(135deg, #ffe19c, #ffb43d) !important;
+  background-color: #ffd06a !important;
+  background-image: linear-gradient(135deg, #fff0c2, #ffc24f) !important;
   color: #3d2808 !important; -webkit-text-fill-color: #3d2808 !important;
   opacity: 1 !important; filter: none !important;
   forced-color-adjust: none !important; color-scheme: light !important;
