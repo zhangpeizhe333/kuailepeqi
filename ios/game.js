@@ -2374,7 +2374,7 @@
   function tapAva(cls, who, mine) {
     const av = esc(who.avatar || '🐣');
     if (mine || !who.uid) return `<span class="${cls}">${av}</span>`;
-    return `<span class="${cls} tap-ava" data-uid="${esc(who.uid)}" data-nick="${esc(who.nickname || '玩家')}" data-ava="${av}" data-gender="${esc(who.gender || 'boy')}" data-vip="${who.vip ? 1 : 0}" title="加好友 / 私信 / 拉黑 / 移除">${av}</span>`;
+    return `<span class="${cls} tap-ava" data-uid="${esc(who.uid)}" data-nick="${esc(who.nickname || '玩家')}" data-ava="${av}" data-gender="${esc(who.gender || 'boy')}" data-vip="${who.vip ? 1 : 0}" title="加好友 / 私信 / 拉黑">${av}</span>`;
   }
 
   function closePlayerCard() {
@@ -2406,12 +2406,11 @@
         <button class="pc-x" id="pcClose" aria-label="关闭">✕</button>
       </div>
       <div class="sheet-actions col">
-        <button class="btn btn-primary btn-lg" id="pcAdd"${isFriend ? ' disabled' : ''}>${isFriend ? '✅ 已是好友' : '＋ 添加好友'}</button>
+        <button class="btn btn-lg btn-primary" id="pcAdd">＋ 添加好友</button>
       </div>
       <div class="pc-acts">
         <button class="fr-btn" id="pcDm">💬 私信</button>
         <button class="fr-btn ghost" id="pcBlock">${isBlocked ? '✅ 已拉黑' : '🚫 拉黑'}</button>
-        <button class="fr-btn ghost" id="pcDel">移除</button>
       </div>
       <p class="muted tiny" style="text-align:center;margin:12px 0 0">点别人的头像，随时可以管理 TA</p>
     </div>`;
@@ -2422,13 +2421,38 @@
     $('#pcClose').onclick = closePlayerCard;
     if (isBlocked) $('#pcBlock').dataset.on = '1';
 
+    /* 主按钮：没加好友 = 「＋ 添加好友」（亮黄），已是好友 = 「移除」（灰底，防误触） */
+    const paintAdd = (friend) => {
+      const b = $('#pcAdd');
+      if (!b) return;
+      b.dataset.on = friend ? '1' : '';
+      b.className = 'btn btn-lg ' + (friend ? 'btn-ghost' : 'btn-primary');
+      b.textContent = friend ? '移除' : '＋ 添加好友';
+    };
+    paintAdd(isFriend);
+
     $('#pcAdd').onclick = async () => {
+      const b = $('#pcAdd');
+      const isFriend = b.dataset.on === '1';
+      b.disabled = true;
       try {
-        const r = await sbRpc('pk_add_friend', { p_uid: c.uid, p_token: c.token, p_friend: peer.uid });
-        if (r && r.ok) { $('#pcAdd').textContent = '✅ 已添加'; $('#pcAdd').disabled = true; toast('加好啦', '🤝'); }
-        else if (r && r.err === 'self') toast('这是你自己呀', '🙃');
-        else toast('没加上，再试一次', '⚠️');
-      } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+        if (isFriend) {
+          const r = await sbRpc('pk_del_friend', { p_uid: c.uid, p_token: c.token, p_friend: peer.uid });
+          if (r && r.err && r.err !== 'nofriend') throw new Error(r.err);
+          paintAdd(false);
+          toast('已移除', '👋');
+        } else {
+          const r = await sbRpc('pk_add_friend', { p_uid: c.uid, p_token: c.token, p_friend: peer.uid });
+          if (r && r.ok) { paintAdd(true); toast('加好啦', '🤝'); }
+          else if (r && r.err === 'self') { paintAdd(true); toast('这是你自己呀', '🙃'); }
+          else throw new Error((r && r.err) || 'fail');
+        }
+      } catch (err) {
+        toast(isFriend ? '网络不太顺，再试一次' : '没加上，再试一次', '📡');
+      } finally {
+        const btn = $('#pcAdd');
+        if (btn) btn.disabled = false;
+      }
     };
     $('#pcDm').onclick = () => { closePlayerCard(); openDm(peer); };
     $('#pcBlock').onclick = async () => {
@@ -2437,13 +2461,6 @@
         $('#pcBlock').dataset.on = on ? '' : '1';
         $('#pcBlock').textContent = on ? '🚫 拉黑' : '✅ 已拉黑';
       }
-    };
-    $('#pcDel').onclick = async () => {
-      try {
-        await sbRpc('pk_del_friend', { p_uid: c.uid, p_token: c.token, p_friend: peer.uid });
-        toast('已移除', '👋');
-        closePlayerCard();
-      } catch (err) { toast('网络不太顺，再试一次', '📡'); }
     };
   }
 
