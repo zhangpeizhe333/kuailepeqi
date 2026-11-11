@@ -14,6 +14,7 @@
   --violet: #b79bff;
   --radius: 22px;
   --shadow: 0 18px 50px rgba(0, 0, 0, .45);
+  color-scheme: dark;   /* 告诉浏览器本页就是深色主题，别自动反色亮黄色按钮 */
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body {
@@ -41,12 +42,22 @@ h3 small { font-weight: 400; }
   border: 1px solid transparent; transition: transform .15s, box-shadow .2s, background .2s, opacity .2s; white-space: nowrap;
 }
 .btn:active { transform: scale(.97); }
-.btn-primary { background: linear-gradient(135deg, #ffd88c, #ffb347); color: #3d2808; box-shadow: 0 8px 22px rgba(255, 179, 71, .3); }
+.btn-primary {
+  background: linear-gradient(135deg, #ffe19c, #ffb43d); color: #3d2808;
+  box-shadow: 0 8px 22px rgba(255, 179, 71, .34);
+  /* 固定黄色，禁止系统「自动深色 / 强制反色」把亮按钮压成暗色 */
+  -webkit-text-fill-color: #3d2808; forced-color-adjust: none; color-scheme: light;
+}
 .btn-ghost { background: rgba(255, 255, 255, .07); border-color: var(--line); }
 .btn-danger { background: #e35d6a; color: #fff; }
 .btn.sm { padding: 7px 13px; font-size: 13px; border-radius: 10px; }
 .btn-lg { width: 100%; padding: 15px; font-size: 16px; border-radius: 15px; }
-.btn:disabled { opacity: .38; cursor: not-allowed; box-shadow: none; }
+.btn:disabled { opacity: .62; cursor: not-allowed; box-shadow: none; }
+/* 已打卡等禁用态：只轻轻压暗，不再整块变灰发黑，文字和黄色底都保持鲜明 */
+.btn-primary:disabled, .act.primary:disabled {
+  opacity: .78; filter: saturate(.9) brightness(.96);
+  -webkit-text-fill-color: #3d2808; forced-color-adjust: none; color-scheme: light;
+}
 
 .card {
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
@@ -283,10 +294,11 @@ h3 small { font-weight: 400; }
 }
 .act:active { transform: scale(.96); }
 .act.primary {
-  background: linear-gradient(135deg, #ffd88c, #ffb347); color: #3d2808;
-  border: none; font-size: 15px; padding: 13px; box-shadow: 0 8px 22px rgba(255, 179, 71, .3); font-weight: 800;
+  background: linear-gradient(135deg, #ffe19c, #ffb43d); color: #3d2808;
+  border: none; font-size: 15px; padding: 13px; box-shadow: 0 8px 22px rgba(255, 179, 71, .34); font-weight: 800;
+  -webkit-text-fill-color: #3d2808; forced-color-adjust: none; color-scheme: light;
 }
-.act:disabled { opacity: .45; }
+.act:disabled { opacity: .62; }
 
 /* 统计 */
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 8px; margin: 8px 0 4px; }
