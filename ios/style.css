@@ -24,7 +24,12 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
   font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; overflow-x: hidden;
 }
-button { font-family: inherit; font-size: inherit; color: inherit; border: none; background: none; cursor: pointer; }
+button {
+  font-family: inherit; font-size: inherit; color: inherit; border: none; background: none; cursor: pointer;
+  /* iOS Safari / WKWebView 默认给 <button> 套一层系统原生外观（-webkit-appearance:button），
+     会在亮黄渐变上叠半透明蒙版把按钮压暗。去掉它，CSS 设的颜色才能原样显示。 */
+  -webkit-appearance: none; appearance: none;
+}
 input { font-family: inherit; }
 .hidden { display: none !important; }
 .file-off { position: fixed; left: -2000px; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
@@ -43,8 +48,11 @@ h3 small { font-weight: 400; }
 }
 .btn:active { transform: scale(.97); }
 .btn-primary {
-  background: linear-gradient(135deg, #ffe19c, #ffb43d); color: #3d2808;
+  background: linear-gradient(135deg, #ffe19c, #ffb43d);
+  background-color: #ffc85a;   /* 纯亮黄兜底：渐变万一被系统忽略，底色依然鲜明 */
+  color: #3d2808;
   box-shadow: 0 8px 22px rgba(255, 179, 71, .34);
+  opacity: 1; filter: none;    /* 钉死亮度，不接受父级或系统的压暗 */
   /* 固定黄色，禁止系统「自动深色 / 强制反色」把亮按钮压成暗色 */
   -webkit-text-fill-color: #3d2808; forced-color-adjust: none; color-scheme: light;
 }
@@ -294,8 +302,11 @@ h3 small { font-weight: 400; }
 }
 .act:active { transform: scale(.96); }
 .act.primary {
-  background: linear-gradient(135deg, #ffe19c, #ffb43d); color: #3d2808;
+  background: linear-gradient(135deg, #ffe19c, #ffb43d);
+  background-color: #ffc85a;   /* 纯亮黄兜底 */
+  color: #3d2808;
   border: none; font-size: 15px; padding: 13px; box-shadow: 0 8px 22px rgba(255, 179, 71, .34); font-weight: 800;
+  opacity: 1; filter: none;    /* 钉死亮度 */
   -webkit-text-fill-color: #3d2808; forced-color-adjust: none; color-scheme: light;
 }
 .act:disabled { opacity: .62; }
@@ -1148,3 +1159,26 @@ h3 small { font-weight: 400; }
 .vip-price > .vip-buy b { display: block; font-size: 20px; color: var(--gold); }
 .vip-price > .vip-buy small { color: var(--muted); font-size: 11px; }
 .iap-note { margin: 8px 0 0; font-size: 11.5px; color: var(--muted); text-align: center; line-height: 1.6; }
+
+/* ===== iOS 版：黄色按钮防压暗 =====
+   Safari / WKWebView 会给 <button> 套系统原生外观，深色模式下还可能
+   再叠一层自动暗化，把亮黄按钮压成暗金色。这里把颜色与亮度全部钉死。 */
+.btn-primary, .act.primary {
+  -webkit-appearance: none; appearance: none;
+  background-image: linear-gradient(135deg, #ffe19c, #ffb43d);
+  background-color: #ffc85a;
+  color: #3d2808; -webkit-text-fill-color: #3d2808;
+  opacity: 1; filter: none;
+  forced-color-adjust: none; color-scheme: light;
+}
+/* 已打卡等禁用态：只轻降透明度，不再叠亮度压暗 */
+.btn-primary:disabled, .act.primary:disabled { opacity: .82; filter: none; }
+@media (prefers-color-scheme: dark) {
+  .btn-primary, .act.primary {
+    background-image: linear-gradient(135deg, #ffe19c, #ffb43d);
+    background-color: #ffc85a;
+    -webkit-text-fill-color: #3d2808;
+    opacity: 1; filter: none;
+  }
+  .btn-primary:disabled, .act.primary:disabled { opacity: .82; filter: none; }
+}
