@@ -281,6 +281,13 @@
     '移除': 'Remove',
     '(我)': '(me)',
     '这是你自己呀': "That's you!",
+
+    /* 点头像弹出的玩家操作卡片 */
+    '＋ 添加好友': '＋ Add friend',
+    '✅ 已是好友': '✅ Already friends',
+    '✅ 已添加': '✅ Added',
+    '点别人的头像，随时可以管理 TA': 'Tap any avatar to manage that player',
+    '加好友 / 私信 / 拉黑 / 移除': 'Add / DM / Block / Remove',
     '已在坚持': 'On a streak', '还没开始': 'Not started',
 
     /* 账号 */
