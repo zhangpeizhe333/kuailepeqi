@@ -1023,11 +1023,12 @@ h3 small { font-weight: 400; }
   display: flex; align-items: center; gap: 10px; margin-top: 9px; padding: 10px 12px;
   border-radius: 14px; border: 1px dashed var(--line); background: rgba(255, 255, 255, .035);
 }
-.ava-lock-row .ava-opt { width: 44px; flex: none; }
-.ava-lock-row p { flex: 1; min-width: 0; font-size: 12px; line-height: 1.45; color: var(--muted); }
-.ava-lock-row button {
-  flex: none; padding: 9px 12px; border-radius: 11px; font-size: 12px; font-weight: 700;
-  color: #3a2a08; background: linear-gradient(135deg, #ffe9a8, #efbb45);
+.ava-opt { position: relative; }
+.ava-opt.vip-ava { background: linear-gradient(135deg, rgba(255, 212, 121, .12), rgba(255, 212, 121, .04)); border-style: dashed; }
+.ava-crown {
+  position: absolute; top: -6px; right: -4px; font-size: 12px; line-height: 1;
+  filter: drop-shadow(0 1px 3px rgba(255, 190, 90, .55)); pointer-events: none;
+  font-style: normal;
 }
 
 /* 小朋友身边的萤火虫 */
