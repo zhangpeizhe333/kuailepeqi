@@ -317,6 +317,7 @@
     /* 会员 */
     '🎫 陪伴会员': '🎫 Buddy VIP',
     '尊贵会员': 'VIP Member', '长期有效': 'Never expires',
+    '找回恢复': 'Recovered',
     '每个激活码只能用一次，输入后立即生效': 'Each code works once, effective immediately',
     '每个兑换码只能用一次，兑换后立即生效': 'Each code works once, effective immediately',
     '再输一个新码可续期叠加（每个码只能用一次）': 'Enter another code to extend (one use per code)',
@@ -505,8 +506,6 @@
     '移除图片': 'Remove photo',
     '发一张图片': 'Add a photo',
     '一次最多发两张图片': 'Up to 2 photos per post',
-    '📸 拍照': '📸 Take a photo',
-    '🖼️ 从手机相册选择': '🖼️ Choose from album',
     '🌷 神秘花园': "🌷 Perry's Garden",
     '存档找回码': 'Save recovery code',
     '重装 / 换手机后凭码找回这份记录': 'Reinstall or switch phones — use the code to get your save back',
