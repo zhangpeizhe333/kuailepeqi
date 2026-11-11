@@ -94,7 +94,7 @@
   });
   function freshSave() {
     return {
-      wx: null, nickname: '', gender: 'boy', age: '', signature: '无语中..', avatar: '🐣',
+      wx: null, nickname: '', gender: 'boy', age: '', signature: { smoke: '无语中..', alcohol: '无语中..', fit: '无语中..' }, avatar: '🐣',
       smoke: null, alcohol: null, fit: null,
       points: 0, pointsToday: { d: '', n: 0 }, teaseToday: { d: '', n: 0 }, notes: [], msgs: [], pekiCheer: 0,
       makeup: { smoke: [], alcohol: [], fit: [] },
@@ -107,6 +107,12 @@
   function fixSave(s) {
     const f = freshSave();
     for (const k of Object.keys(f)) if (s[k] === undefined) s[k] = f[k];
+    /* 个性签名：老存档是三页共用的一个字符串，改成戒烟/戒酒/运动各自独立，老签名三页先用 */
+    if (!s.signature || typeof s.signature !== 'object' || Array.isArray(s.signature)) {
+      const old = (typeof s.signature === 'string' && s.signature.trim()) || '无语中..';
+      s.signature = { smoke: old, alcohol: old, fit: old };
+    }
+    for (const k of ['smoke', 'alcohol', 'fit']) if (typeof s.signature[k] !== 'string' || !s.signature[k].trim()) s.signature[k] = '无语中..';
     /* 补签记录：老存档可能没有，补齐三个模块的数组 */
     if (!s.makeup || typeof s.makeup !== 'object') s.makeup = { smoke: [], alcohol: [], fit: [] };
     for (const k of ['smoke', 'alcohol', 'fit']) if (!Array.isArray(s.makeup[k])) s.makeup[k] = [];
@@ -587,11 +593,12 @@
   }
   function stageHTML(mod, goalText) {
     const sceneSvg = QuitArt.scene(isDay() ? 'day' : 'night', sceneIdxs[mod], sceneK(mod));
+    const pageSign = (S.signature && typeof S.signature === 'object') ? (S.signature[mod] || '') : (S.signature || '');
     return `<div class="stage">
       ${sceneSvg}
       <button class="scene-btn" data-act="scene" title="换个场景">🖼️</button>
       <div class="goal-banner">${goalText}</div>
-      ${S.signature ? `<div class="goal-sign">“${esc(S.signature)}”</div>` : ''}
+      ${pageSign ? `<div class="goal-sign">“${esc(pageSign)}”</div>` : ''}
     </div>`;
   }
   function titleBar(mod, list) {
@@ -698,7 +705,7 @@
         <div><label>烟龄（年）</label><input id="eYears" type="number" min="0" value="${m.cfg.years}"></div>
         <div><label>每天（支）</label><input id="eCigs" type="number" min="1" value="${m.cfg.cigs}"></div>
         <div><label>元/包</label><input id="ePrice" type="number" min="1" step="0.5" value="${m.cfg.price}"></div>
-        <div style="flex-basis:100%"><label>个性签名</label><input id="eSign" maxlength="20" value="${esc(S.signature || '')}"></div>`)}
+        <div style="flex-basis:100%"><label>个性签名</label><input id="eSign" maxlength="20" value="${esc(S.signature.smoke || '')}"></div>`)}
     `;
     bindScene(); bindTitle(SMOKE_TITLES, 'smoke');
     const kidBox = () => $('.scene-kid');
@@ -713,7 +720,7 @@
       S.smoke.cfg.years = Math.max(0, parseInt($('#eYears').value, 10) || 0);
       S.smoke.cfg.cigs = Math.max(1, parseInt($('#eCigs').value, 10) || 20);
       S.smoke.cfg.price = Math.max(0.5, parseFloat($('#ePrice').value) || 10);
-      S.signature = $('#eSign').value.trim();
+      S.signature.smoke = $('#eSign').value.trim();
       persist(); toast('已保存', '✏️'); render();
     });
     const lv = $('[data-lv="smoke"]');
@@ -739,7 +746,7 @@
       const price = Math.max(0.5, parseFloat($('#smPrice').value) || 10);
       const sign = $('#smSign').value.trim() || '无语中..';
       S.smoke = { cfg: { years, cigs, price, started: null }, total: 0, lastDate: '', lastTime: null, kidName: '' };
-      S.signature = sign;
+      S.signature.smoke = sign;
       persist();
       toast('填好啦，点打卡就算正式开始！', '🚬');
       render();
@@ -792,7 +799,7 @@
         <div><label>白酒 元/斤</label><input id="aBJP" type="number" min="0" value="${m.cfg.baijiuP}"></div>
         <div><label>啤酒（瓶/天）</label><input id="aBeer" type="number" min="0" value="${m.cfg.bottle}"></div>
         <div><label>啤酒 元/瓶</label><input id="aBeerP" type="number" min="0" step="0.5" value="${m.cfg.bottleP}"></div>
-        <div style="flex-basis:100%"><label>个性签名</label><input id="aSign" maxlength="20" value="${esc(S.signature || '')}"></div>`)}
+        <div style="flex-basis:100%"><label>个性签名</label><input id="aSign" maxlength="20" value="${esc(S.signature.alcohol || '')}"></div>`)}
     `;
     bindScene(); bindTitle(ALCOHOL_TITLES, 'alcohol');
     const kidBox = () => $('.scene-kid');
@@ -810,7 +817,7 @@
       c.baijiuP = Math.max(0, parseFloat($('#aBJP').value) || 0);
       c.bottle = Math.max(0, parseFloat($('#aBeer').value) || 0);
       c.bottleP = Math.max(0, parseFloat($('#aBeerP').value) || 0);
-      S.signature = $('#aSign').value.trim();
+      S.signature.alcohol = $('#aSign').value.trim();
       persist(); toast('已保存', '✏️'); render();
     });
     const lv = $('[data-lv="alcohol"]');
@@ -844,7 +851,7 @@
         }, total: 0, lastDate: '', lastTime: null
       };
       const sg = $('#alSign').value.trim();
-      if (sg) S.signature = sg;
+      if (sg) S.signature.alcohol = sg;
       persist();
       toast('填好啦，点打卡就算正式开始！', '🍺');
       render();
@@ -888,7 +895,7 @@
       ${infoCard('fit', '健身', `
         <div><label>身高（cm）</label><input id="fH" type="number" min="50" max="250" value="${c.h}"></div>
         <div><label>体重（kg）</label><input id="fW" type="number" min="10" max="400" step="0.1" value="${c.w}"></div>
-        <div style="flex-basis:100%"><label>个性签名</label><input id="fSign" maxlength="20" value="${esc(S.signature || '')}"></div>`)}
+        <div style="flex-basis:100%"><label>个性签名</label><input id="fSign" maxlength="20" value="${esc(S.signature.fit || '')}"></div>`)}
     `;
     bindScene(); bindTitle(FIT_TITLES, 'fit');
     const kidBox = () => $('.scene-kid');
@@ -905,7 +912,7 @@
     bindInfo('fit', () => {
       c.h = Math.max(50, parseFloat($('#fH').value) || 0);
       c.w = Math.max(10, parseFloat($('#fW').value) || 0);
-      S.signature = $('#fSign').value.trim();
+      S.signature.fit = $('#fSign').value.trim();
       persist(); toast('已保存', '✏️'); render();
     });
     const lv = $('[data-lv="fit"]');
@@ -3123,7 +3130,7 @@
     setInterval(() => { if (S && tab === 'peki' && !$('.sheet-mask')) updatePekiBtns(); }, 1000);
 
     const cur = DB.current && DB.accounts[DB.current];
-    if (cur) { S = fixSave(cur); enterApp(); } else showLogin();
+    if (cur) { S = fixSave(cur); enterApp(); persist(); } else showLogin();
   }
 
   document.addEventListener('DOMContentLoaded', boot);
