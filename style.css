@@ -1156,3 +1156,47 @@ h3 small { font-weight: 400; }
   75% { transform: translate(-18px, -14px) scale(1.12); opacity: 1; }
 }
 .vip-ff { pointer-events: none; }
+
+/* ===== 点头像：玩家操作卡片 ===== */
+/* 群聊 / 花园是全屏层（z-index 1600），普通弹层(60)会被盖住，故独立用 2000 */
+.pc-mask {
+  position: fixed; inset: 0; z-index: 2000;
+  background: rgba(10, 6, 20, .68);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  opacity: 0; transition: opacity .2s;
+}
+.pc-mask.in { opacity: 1; }
+.pc-card {
+  width: min(330px, 100%);
+  background: #241c3e; border: 1px solid rgba(255, 212, 121, .32);
+  border-radius: 20px; padding: 18px 17px 16px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .55);
+  transform: translateY(12px) scale(.97); transition: transform .2s;
+}
+.pc-mask.in .pc-card { transform: none; }
+.pc-head { display: flex; align-items: center; gap: 11px; margin-bottom: 14px; }
+.pc-ava {
+  flex: none; width: 48px; height: 48px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center; font-size: 27px;
+  background: rgba(255, 255, 255, .08); border: 1px solid var(--line);
+}
+.pc-info { flex: 1; min-width: 0; font-size: 15px; font-weight: 700; }
+.pc-info small { display: block; color: var(--muted); font-size: 11.5px; font-weight: 400; margin-top: 2px; }
+.pc-x {
+  flex: none; width: 28px; height: 28px; border-radius: 9px; font-size: 13px;
+  color: var(--muted); background: rgba(255, 255, 255, .07); border: 1px solid var(--line);
+}
+.pc-acts { display: flex; gap: 7px; margin-top: 12px; }
+.pc-acts .fr-btn { flex: 1; padding: 10px 3px; font-size: 12.5px; }
+
+/* 别人头像右下角一个小 ＋，暗示可以点 */
+.tap-ava { position: relative; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.tap-ava::after {
+  content: '＋'; position: absolute; right: -5px; bottom: -5px;
+  width: 15px; height: 15px; border-radius: 50%;
+  background: linear-gradient(135deg, #fff0c2, #ffc24f); color: #3d2808;
+  font-size: 11px; line-height: 15px; text-align: center; font-weight: 900;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, .45); pointer-events: none;
+  -webkit-text-fill-color: #3d2808;
+}
+.tap-ava:active { transform: scale(.9); }
