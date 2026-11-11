@@ -14,7 +14,9 @@
   --violet: #b79bff;
   --radius: 22px;
   --shadow: 0 18px 50px rgba(0, 0, 0, .45);
-  color-scheme: dark;   /* 告诉浏览器本页就是深色主题，别自动反色亮黄色按钮 */
+  /* 整页配色由我们自己定义，声明 light 可阻止 iOS Safari 对「亮色元素」做自动暗化，
+     否则它会把亮黄按钮调成灰黄。深色观感由 body 背景保证，不依赖系统主题。 */
+  color-scheme: light;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body {
@@ -30,7 +32,7 @@ button {
      会在亮黄渐变上叠半透明蒙版把按钮压暗。去掉它，CSS 设的颜色才能原样显示。 */
   -webkit-appearance: none; appearance: none;
 }
-input { font-family: inherit; }
+input, textarea, select { font-family: inherit; color-scheme: dark; }
 .hidden { display: none !important; }
 .file-off { position: fixed; left: -2000px; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .muted { color: var(--muted); }
@@ -48,23 +50,30 @@ h3 small { font-weight: 400; }
 }
 .btn:active { transform: scale(.97); }
 .btn-primary {
-  background: linear-gradient(135deg, #ffe19c, #ffb43d);
-  background-color: #ffc85a;   /* 纯亮黄兜底：渐变万一被系统忽略，底色依然鲜明 */
-  color: #3d2808;
+  -webkit-appearance: none !important; appearance: none !important;
+  background-color: #ffc85a !important;   /* 纯亮黄兜底：渐变被忽略时底色依然鲜明 */
+  background-image: linear-gradient(135deg, #ffe19c, #ffb43d) !important;
+  color: #3d2808 !important; -webkit-text-fill-color: #3d2808 !important;
+  opacity: 1 !important; filter: none !important;
+  forced-color-adjust: none !important; color-scheme: light !important;
   box-shadow: 0 8px 22px rgba(255, 179, 71, .34);
-  opacity: 1; filter: none;    /* 钉死亮度，不接受父级或系统的压暗 */
-  /* 固定黄色，禁止系统「自动深色 / 强制反色」把亮按钮压成暗色 */
-  -webkit-text-fill-color: #3d2808; forced-color-adjust: none; color-scheme: light;
 }
 .btn-ghost { background: rgba(255, 255, 255, .07); border-color: var(--line); }
 .btn-danger { background: #e35d6a; color: #fff; }
 .btn.sm { padding: 7px 13px; font-size: 13px; border-radius: 10px; }
 .btn-lg { width: 100%; padding: 15px; font-size: 16px; border-radius: 15px; }
 .btn:disabled { opacity: .62; cursor: not-allowed; box-shadow: none; }
-/* 已打卡等禁用态：只轻轻压暗，不再整块变灰发黑，文字和黄色底都保持鲜明 */
-.btn-primary:disabled, .act.primary:disabled {
-  opacity: .78; filter: saturate(.9) brightness(.96);
-  -webkit-text-fill-color: #3d2808; forced-color-adjust: none; color-scheme: light;
+/* 已打卡等禁用态：底色和文字仍是鲜明亮黄，只留极轻的透明度差作区分。
+   加 !important 是为了压过 .btn:disabled / .act:disabled 的 opacity:.62，
+   以及 iOS 系统对禁用按钮的默认变灰处理。 */
+.btn-primary:disabled, .btn-primary[disabled],
+.act.primary:disabled, .act.primary[disabled] {
+  -webkit-appearance: none !important; appearance: none !important;
+  background-color: #ffc85a !important;
+  background-image: linear-gradient(135deg, #ffe19c, #ffb43d) !important;
+  color: #3d2808 !important; -webkit-text-fill-color: #3d2808 !important;
+  opacity: .92 !important; filter: none !important;
+  forced-color-adjust: none !important; color-scheme: light !important;
 }
 
 .card {
@@ -302,12 +311,13 @@ h3 small { font-weight: 400; }
 }
 .act:active { transform: scale(.96); }
 .act.primary {
-  background: linear-gradient(135deg, #ffe19c, #ffb43d);
-  background-color: #ffc85a;   /* 纯亮黄兜底 */
-  color: #3d2808;
+  -webkit-appearance: none !important; appearance: none !important;
+  background-color: #ffc85a !important;
+  background-image: linear-gradient(135deg, #ffe19c, #ffb43d) !important;
+  color: #3d2808 !important; -webkit-text-fill-color: #3d2808 !important;
+  opacity: 1 !important; filter: none !important;
+  forced-color-adjust: none !important; color-scheme: light !important;
   border: none; font-size: 15px; padding: 13px; box-shadow: 0 8px 22px rgba(255, 179, 71, .34); font-weight: 800;
-  opacity: 1; filter: none;    /* 钉死亮度 */
-  -webkit-text-fill-color: #3d2808; forced-color-adjust: none; color-scheme: light;
 }
 .act:disabled { opacity: .62; }
 
