@@ -669,9 +669,13 @@
   var ZH = /[\u4e00-\u9fff]/;
 
   /* iOS 构建脚本会注入：CUR = '$'（英文界面货币符号）与 PRICE 价格表；
-     网页 / 安卓保持空值，仍用 ¥，价格不变 */
+     网页 / 安卓保持空值，仍用 ¥，价格不变。
+     PRICE_ANY = true 时（iOS），中文界面也用 PRICE 表显示美元价，
+     但只影响充值弹窗那几个纯价格节点（¥8/¥88/¥188），
+     打卡省钱等页面的 ¥ 保持不动 */
   var CUR = '';
   var PRICE = {};
+  var PRICE_ANY = false;
 
   function detect() {
     try {
@@ -684,8 +688,9 @@
   var LANG = detect();
 
   function tr(s) {
-    if (LANG !== 'en') return null;
+    /* 纯价格 key（¥8 等）不受语言限制：iOS 中文界面也显示美元价 */
     if (Object.prototype.hasOwnProperty.call(PRICE, s)) return PRICE[s];
+    if (LANG !== 'en') return null;
     if (!ZH.test(s)) return null;
     var out = null;
     if (Object.prototype.hasOwnProperty.call(EXACT, s)) out = EXACT[s];
@@ -753,7 +758,7 @@
   }
 
   function apply(root) {
-    if (LANG !== 'en') return;
+    if (LANG !== 'en' && !PRICE_ANY) return;
     root = root || document;
     if (root.nodeType === 3) { /* 文本节点直接处理 */ }
     try { walkText(root); walkAttrs(root); } catch (e) {}
@@ -817,7 +822,7 @@
   /* MutationObserver：新插入/变更的节点同步翻译（同帧完成，避免中文闪现） */
   var busy = false;
   function schedule() {
-    if (busy || LANG !== 'en') return;
+    if (busy || (LANG !== 'en' && !PRICE_ANY)) return;
     busy = true;
     try { apply(document.body || document); } catch (e) {}
     busy = false;
