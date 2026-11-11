@@ -18,7 +18,7 @@
 
   const DB_KEY = 'quitwalk_accounts_v1';
   /* 可选聊天头像（全员可自选；🐰🐯🦁🦄 为会员专属，随机分配时跳过） */
-  const AVATARS = ['🐣', '🐰', '🐻', '🦊', '🐼', '🐨', '🐯', '🦁', '🐮', '🐸', '🐷', '🐵', '🐶', '🐱', '🦄', '🐧'];
+  const AVATARS = ['🐣', '🐻', '🦊', '🐼', '🐨', '🐮', '🐸', '🐷', '🐵', '🐶', '🐱', '🐧', '🐰', '🐯', '🦁', '🦄'];
   const VIP_AVATARS = ['🐰', '🐯', '🦁', '🦄'];
 
   let DB = null;
@@ -1280,7 +1280,6 @@
     const big = !dead && st.bigUntil > now;
     const girlOn = !dead && st.girlUntil > now;
     const dogOn = !dead && (st.cheerTotal || 0) >= DOG_AT;
-    const ptOn = !dead && !dogOn && st.ptUntil > now;
     const charm = dead ? 0 : st.charm;
     /* 小佩奇：魅力 10 / 50 / 200 各出现一个，发色依次黄、白、红 */
     const MINI_AT = [10, 50, 200];
@@ -1292,7 +1291,7 @@
     const joyV = dead ? 0 : joyLeft(st) / 60000;
     const sleepy = !dead && joyV <= 0;
 
-    const bgSvg = ptOn ? QuitArt.pekiBg() : `<svg class="scene-svg" viewBox="0 0 800 588" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
+    const bgSvg = `<svg class="scene-svg" viewBox="0 0 800 588" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
           <defs><radialGradient id="pkG" cx=".5" cy=".35" r=".7"><stop offset="0" stop-color="#3a3158"/><stop offset="1" stop-color="#241f38"/></radialGradient></defs>
           <rect width="800" height="588" fill="url(#pkG)"/>
           ${[[260, 110], [520, 130], [380, 80], [460, 210], [320, 220], [600, 200]].map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="2.2" fill="#ffe9a8" class="spk" style="animation-delay:${i * .5}s"/>`).join('')}
@@ -1362,7 +1361,7 @@
             <button class="act" id="feedBtn">🍽️ 喂食</button>
             <button class="act" id="teaseBtn">💃 逗一逗</button>
             <button class="act" id="playBtn">${sleepy ? '🎈 叫醒佩奇' : '🎈 玩耍'}</button>
-            <button class="act primary" id="cheerPeki">💖 鼓励佩奇${ptOn ? '<small class="cheer-num">已解锁 🇵🇹 主场</small>' : ''}</button>
+            <button class="act primary" id="cheerPeki">💖 鼓励佩奇</button>
           </div>`}
       <button class="btn btn-ghost btn-lg garden-btn" id="gardenBtn">🌷 佩奇的神秘花园</button>
       <div class="card">
@@ -1391,21 +1390,14 @@
       $('#cheerPeki').onclick = () => {
         heartsBurst($('.peki-stage'));
         anim($('.peki-stage .kid-anim'), 'jump');
-        const prev = S.pekiCheer || 0;
-        S.pekiCheer = prev + 1;
         st.cheerTotal = (st.cheerTotal || 0) + 1;
-        const wasPt = st.ptUntil > Date.now();
         if (st.cheerTotal === DOG_AT) {
-          st.ptUntil = 0; S.pekiCheer = 0;
           persist();
           setTimeout(() => { toast('🐶 汪！汪！', '🐶'); if (tab === 'peki') renderPeki(); }, 1300);
           return;
         }
-        if (st.cheerTotal > DOG_AT) { /* 小狗已经在啦 */ }
-        else if (S.pekiCheer >= 10) { st.ptUntil = Date.now() + PK_DUR; S.pekiCheer = 0; }
         persist();
         toast(pick(['谢谢你呀，我今天超有干劲！', '收到爱心，满分回血！', '嘿嘿，被鼓励到了～', '有你在，我什么都不怕']), '💖');
-        if (!wasPt && st.ptUntil > Date.now()) setTimeout(() => { if (tab === 'peki') renderPeki(); }, 1400);
       };
       updatePekiBtns();
     }
@@ -1501,7 +1493,7 @@
     }
   }
 
-  /* ---------------- 佩奇的神秘花园（公共动态 · 文字/图片 · 7 天自动过期） ---------------- */
+  /* ---------------- 佩奇的神秘花园（公共动态 · 文字+最多两张图 · 点赞评论 · 7 天过期） ---------------- */
   const GARDEN_TTL = 7 * DAY;
   let gardenTimer = null;
 
@@ -1534,7 +1526,10 @@
   function openGarden() {
     if ($('#gardenOv')) return;
     const c = cloudId();
-    let pendingImg = '';
+    const pending = [];                 /* 待发布的图片，最多 2 张 */
+    const expanded = new Set();         /* 已展开的长文本（动态/评论通用） */
+    const cmtOpen = new Set();          /* 正在输入评论的动态 */
+    const cmtAll = new Set();           /* 已展开全部评论的动态 */
     const ov = document.createElement('div');
     ov.className = 'chat-ov';
     ov.id = 'gardenOv';
@@ -1545,53 +1540,168 @@
       </div>
       <div class="garden-tip">发一条动态，7 天后自动消失，所有人进花园都看得到</div>
       <div class="chat-body garden-body" id="gardenBody"><p class="muted tiny" style="text-align:center;margin-top:30px">正在走进花园…</p></div>
-      <div class="garden-pend hidden" id="gardenPend">
-        <img id="gardenPendImg" alt=""><button id="gardenPendDel" title="移除图片">✕</button>
-      </div>
+      <div class="garden-pend hidden" id="gardenPend"></div>
       <div class="chat-input">
-        <button class="garden-pic" id="gardenPic" title="发一张图片">📷</button>
+        <button class="garden-pic" id="gardenCam" title="拍照">📷</button>
+        <button class="garden-pic" id="gardenAlbum" title="从相册选择">🖼️</button>
         <input id="gardenText" maxlength="200" placeholder="和大家分享你的坚持…" autocomplete="off">
         <button id="gardenSend">发布</button>
-        <input type="file" id="gardenFile" accept="image/*" class="hidden">
+        <input type="file" id="gardenFileCam" accept="image/*" capture="environment" class="hidden">
+        <input type="file" id="gardenFileAlbum" accept="image/*" class="hidden">
       </div>`;
     document.body.appendChild(ov);
     const body = $('#gardenBody');
 
-    const draw = (arr) => {
-      if (!arr.length) { body.innerHTML = '<p class="muted tiny" style="text-align:center;margin-top:30px">还没有动态，第一条由你来发～</p>'; return; }
-      body.innerHTML = arr.map((m) => {
+    /* 长文本折叠（>90 字折叠，点击显示全文） */
+    const foldHtml = (t, key) => {
+      if (t.length <= 90) return esc(t);
+      const open = expanded.has(key);
+      return `<span class="gd-txt${open ? ' open' : ''}">${esc(t)}</span><button class="gd-fold" data-fk="${key}">${open ? '收起' : '显示全文'}</button>`;
+    };
+
+    const draw = (posts, cmts) => {
+      if (!posts.length) { body.innerHTML = '<p class="muted tiny" style="text-align:center;margin-top:30px">还没有动态，第一条由你来发～</p>'; return; }
+      const byPost = {};
+      (cmts || []).forEach((cm) => { (byPost[cm.post_id] = byPost[cm.post_id] || []).push(cm); });
+      body.innerHTML = posts.map((m) => {
         const mine = m.uid === c.uid;
         const who = mine ? { nickname: S.nickname || '我', avatar: S.avatar || '🐣', gender: S.gender, vip: vipOn() } : m;
         const ts = new Date(m.created_at).getTime();
-        const img = m.img ? `<img class="gd-img" src="${m.img}" alt="" loading="lazy">` : '';
-        const txt = m.body ? `<div class="chat-bub them gd-text">${esc(m.body)}</div>` : '';
+        const imgs = [m.img, m.img2].filter(Boolean);
+        const imgHtml = imgs.length
+          ? `<div class="gd-imgs">${imgs.map((x) => `<img class="gd-img" src="${x}" alt="" loading="lazy">`).join('')}</div>` : '';
+        const textHtml = m.body
+          ? `<div class="gd-text">${foldHtml(m.body, 'p' + m.id)}</div>` : '';
+        const liked = (m.likers || []).includes(c.uid);
+        const list = (byPost[m.id] || []).slice().sort((x, y) => (y.likes - x.likes) || (new Date(y.created_at) - new Date(x.created_at)));
+        const showAll = cmtAll.has(m.id);
+        const shown = showAll ? list : list.slice(0, 5);
+        const cmtHtml = shown.map((cm) => {
+          const cmine = cm.uid === c.uid;
+          const cwho = cmine ? { nickname: S.nickname || '我', avatar: S.avatar || '🐣', gender: S.gender, vip: vipOn() } : cm;
+          const cliked = (cm.likers || []).includes(c.uid);
+          return `<div class="gd-cmt${cmine ? ' mine' : ''}">
+            <span class="cmt-ava">${esc(cwho.avatar || '🐣')}</span>
+            <div class="cmt-col">
+              <div class="cmt-who">${nameHtml(cwho)}${genderMark(cwho.gender)}</div>
+              <div class="cmt-bub">${foldHtml(cm.body, 'c' + cm.id)}</div>
+            </div>
+            <button class="gd-clike${cliked ? ' on' : ''}" data-clike="${cm.id}">👍${cm.likes ? ' ' + cm.likes : ''}</button>
+            ${cmine ? `<button class="gd-del" data-cdel="${cm.id}">删</button>` : ''}
+          </div>`;
+        }).join('');
+        const more = !showAll && list.length > 5
+          ? `<button class="gd-more" data-more="${m.id}">查看更多评论（${list.length - 5}）</button>` : '';
+        const cmtRow = cmtOpen.has(m.id)
+          ? `<div class="gd-cmtrow" data-crow="${m.id}">
+              <input maxlength="100" placeholder="说点什么…" autocomplete="off">
+              <button data-csend="${m.id}">发送</button>
+            </div>` : '';
         return `<div class="gd-item${mine ? ' mine' : ''}">
           <span class="chat-ava">${esc(who.avatar || '🐣')}</span>
           <div class="msg-col">
             <div class="chat-who ${mine ? 'r' : ''}">${nameHtml(who)}${genderMark(who.gender)}<span class="gd-left">🌷 ${gardenLeftDays(ts)} 天后消失</span></div>
-            ${txt}${img}
-            ${mine ? '<button class="gd-del" data-id="' + m.id + '">删</button>' : ''}
+            <div class="gd-post">${textHtml}${imgHtml}</div>
+            <div class="gd-actions">
+              <button class="gd-like${liked ? ' on' : ''}" data-like="${m.id}">👍${m.likes ? ' ' + m.likes : ''}</button>
+              <button class="gd-cmtbtn" data-cbtn="${m.id}">💬${list.length ? ' ' + list.length : ''}</button>
+              ${mine ? `<button class="gd-del" data-id="${m.id}">删</button>` : ''}
+            </div>
+            <div class="gd-cmts">${cmtHtml}${more}${cmtRow}</div>
           </div>
         </div>`;
       }).join('');
       body.scrollTop = body.scrollHeight;
-      $$('.gd-del').forEach((b) => {
-        b.onclick = async () => {
-          b.disabled = true;
+
+      /* 折叠/展开长文本 */
+      $$('.gd-fold').forEach((bt) => {
+        bt.onclick = () => {
+          const k = bt.dataset.fk;
+          expanded.has(k) ? expanded.delete(k) : expanded.add(k);
+          const sp = bt.previousElementSibling;
+          if (sp) { sp.classList.toggle('open', expanded.has(k)); bt.textContent = expanded.has(k) ? '收起' : '显示全文'; }
+        };
+      });
+      /* 图片点开变大图 */
+      $$('.gd-img').forEach((im) => { im.onclick = () => im.classList.toggle('big'); });
+      /* 点赞动态 */
+      $$('.gd-like').forEach((bt) => {
+        bt.onclick = async () => {
+          bt.disabled = true;
           try {
-            const r = await sbRpc('pk_garden_delete', { p_uid: c.uid, p_token: c.token, p_id: parseInt(b.dataset.id, 10) });
+            const r = await sbRpc('pk_garden_like', { p_uid: c.uid, p_token: c.token, p_kind: 'post', p_id: parseInt(bt.dataset.like, 10) });
+            if (r && r.ok) load(); else toast('没点上，再试一次', '⚠️');
+          } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+        };
+      });
+      /* 点赞评论 */
+      $$('.gd-clike').forEach((bt) => {
+        bt.onclick = async () => {
+          bt.disabled = true;
+          try {
+            const r = await sbRpc('pk_garden_like', { p_uid: c.uid, p_token: c.token, p_kind: 'cmt', p_id: parseInt(bt.dataset.clike, 10) });
+            if (r && r.ok) load(); else toast('没点上，再试一次', '⚠️');
+          } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+        };
+      });
+      /* 评论输入展开/收起 */
+      $$('.gd-cmtbtn').forEach((bt) => {
+        bt.onclick = () => {
+          const id = parseInt(bt.dataset.cbtn, 10);
+          cmtOpen.has(id) ? cmtOpen.delete(id) : cmtOpen.add(id);
+          draw(posts, cmts);
+          const row = document.querySelector(`.gd-cmtrow[data-crow="${id}"] input`);
+          if (row) setTimeout(() => row.focus(), 50);
+        };
+      });
+      /* 发送评论 */
+      $$('.gd-cmtrow [data-csend]').forEach((bt) => {
+        bt.onclick = async () => {
+          const row = bt.closest('.gd-cmtrow');
+          const inp = row.querySelector('input');
+          const t = inp.value.trim();
+          if (!t) return toast('评论不能为空', '💬');
+          bt.disabled = true;
+          try {
+            const r = await sbRpc('pk_garden_cmt_send', { p_uid: c.uid, p_token: c.token, p_post_id: parseInt(bt.dataset.csend, 10), p_text: t });
+            if (r && r.ok) { toast('评论已发出', '💬'); cmtAll.add(parseInt(bt.dataset.csend, 10)); load(); }
+            else if (r && r.err === 'too_fast') toast('发得太快啦，休息一下再发', '⏳');
+            else toast('没发出去，再试一次', '⚠️');
+          } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+        };
+      });
+      /* 查看更多评论 */
+      $$('.gd-more').forEach((bt) => {
+        bt.onclick = () => { cmtAll.add(parseInt(bt.dataset.more, 10)); draw(posts, cmts); };
+      });
+      /* 删自己的动态 */
+      $$('.gd-del[data-id]').forEach((bt) => {
+        bt.onclick = async () => {
+          bt.disabled = true;
+          try {
+            const r = await sbRpc('pk_garden_delete', { p_uid: c.uid, p_token: c.token, p_id: parseInt(bt.dataset.id, 10) });
             if (r && r.ok) { toast('已从花园删除', '🌷'); load(); }
             else toast('没删掉，再试一次', '⚠️');
           } catch (err) { toast('网络不太顺，再试一次', '📡'); }
         };
       });
-      $$('.gd-img').forEach((im) => { im.onclick = () => im.classList.toggle('big'); });
+      /* 删自己的评论 */
+      $$('.gd-del[data-cdel]').forEach((bt) => {
+        bt.onclick = async () => {
+          bt.disabled = true;
+          try {
+            const r = await sbRpc('pk_garden_cmt_delete', { p_uid: c.uid, p_token: c.token, p_id: parseInt(bt.dataset.cdel, 10) });
+            if (r && r.ok) { toast('评论已删除', '💬'); load(); }
+            else toast('没删掉，再试一次', '⚠️');
+          } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+        };
+      });
     };
 
     const load = async () => {
       try {
-        const arr = await sbRpc('pk_garden_fetch', {});
-        draw(arr || []);
+        const [arr, cm] = await Promise.all([sbRpc('pk_garden_fetch', {}), sbRpc('pk_garden_cmts_fetch', {})]);
+        draw(arr || [], cm || []);
       } catch (err) {
         body.innerHTML = '<p class="muted tiny" style="text-align:center;margin-top:30px">花园加载失败，稍后再试</p>';
       }
@@ -1600,39 +1710,43 @@
     if (gardenTimer) clearInterval(gardenTimer);
     gardenTimer = setInterval(load, 15000);
 
-    const setPend = (dataUrl) => {
-      pendingImg = dataUrl || '';
-      const pd = $('#gardenPend'), pi = $('#gardenPendImg'), pc = $('#gardenPic');
+    const setPend = () => {
+      const pd = $('#gardenPend');
       if (!pd) return;
-      pd.classList.toggle('hidden', !pendingImg);
-      if (pendingImg) pi.src = pendingImg;
-      pc.classList.toggle('has', !!pendingImg);
+      pd.classList.toggle('hidden', !pending.length);
+      pd.innerHTML = pending.map((x, i) => `<img src="${x}" alt=""><button data-pd="${i}" title="移除图片">✕</button>`).join('');
+      $$('#gardenPend [data-pd]').forEach((bt) => { bt.onclick = () => { pending.splice(parseInt(bt.dataset.pd, 10), 1); setPend(); }; });
+      $$('#gardenCam,#gardenAlbum').forEach((bt) => bt.classList.toggle('has', pending.length >= 2));
     };
-    $('#gardenPendDel').onclick = () => setPend('');
-    $('#gardenPic').onclick = () => $('#gardenFile').click();
-    $('#gardenFile').onchange = (e) => {
-      const f = e.target.files && e.target.files[0];
-      e.target.value = '';
+    const addFile = (f) => {
       if (!f) return;
       if (!/^image\//.test(f.type)) return toast('只能发图片哦', '📷');
-      gardenCompress(f, (dataUrl) => {
-        if (!dataUrl) return toast('图片太大，换一张小点的', '⚠️');
-        setPend(dataUrl);
+      if (pending.length >= 2) return toast('一次最多发两张图片', '📷');
+      gardenCompress(f, (d) => {
+        if (!d) return toast('图片太大，换一张小点的', '⚠️');
+        pending.push(d);
+        setPend();
         toast('图片已选好，点发布', '📷');
       });
     };
+    $('#gardenCam').onclick = () => $('#gardenFileCam').click();
+    $('#gardenAlbum').onclick = () => $('#gardenFileAlbum').click();
+    [['#gardenFileCam'], ['#gardenFileAlbum']].forEach(([sel]) => {
+      $(sel).onchange = (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; addFile(f); };
+    });
 
     const post = async () => {
       const el = $('#gardenText');
       const t = el.value.trim();
-      if (!t && !pendingImg) return toast('写点什么，或加张图片', '🌷');
+      if (!t && !pending.length) return toast('写点什么，或加张图片', '🌷');
       const btn = $('#gardenSend');
       btn.disabled = true;
       try {
-        const r = await sbRpc('pk_garden_post', { p_uid: c.uid, p_token: c.token, p_text: t, p_img: pendingImg });
+        const r = await sbRpc('pk_garden_post', { p_uid: c.uid, p_token: c.token, p_text: t, p_img: pending[0] || '', p_img2: pending[1] || '' });
         if (r && r.ok) {
           el.value = '';
-          setPend('');
+          pending.length = 0;
+          setPend();
           toast('动态已发到花园', '🌷');
           load();
         } else if (r && r.err === 'img_too_big') { toast('图片太大，换一张小点的', '⚠️'); }
@@ -2618,7 +2732,7 @@
       <div class="form"><label>昵称</label>
         <input id="nickInput" maxlength="12" value="${esc(S.nickname || '')}" placeholder="给自己起个名字"></div>
       <div class="ava-pick">
-        <div class="ava-pick-head"><b>聊天头像</b>${vip ? '<span class="vip-mini">VIP</span>' : '<span class="ava-lock">👑 = 会员专属</span>'}</div>
+        <div class="ava-pick-head"><b>聊天头像</b></div>
         <div class="ava-grid" id="avaGrid">${AVATARS.map((a) => {
           const vipOnly = VIP_AVATARS.includes(a);
           return `<button class="ava-opt${a === pickAva ? ' on' : ''}${vipOnly ? ' vip-ava' : ''}" data-a="${a}" title="${vipOnly ? '会员专属' : ''}">${a}${vipOnly && !vip ? '<i class="ava-crown">👑</i>' : ''}</button>`;
