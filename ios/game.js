@@ -1707,7 +1707,10 @@
       return `<span class="gd-txt${open ? ' open' : ''}">${esc(t)}</span><button class="gd-fold" data-fk="${key}">${open ? '收起' : '显示全文'}</button>`;
     };
 
-    const draw = (posts, cmts) => {
+    const draw = (posts, cmts, keepTop) => {
+      /* 花园是「最新的在最上面」：首次进入停在顶部看最新；
+         15 秒自动刷新时保持当前位置，别把正在看的人拽走 */
+      const prevTop = keepTop ? body.scrollTop : 0;
       if (!posts.length) { body.innerHTML = '<p class="muted tiny" style="text-align:center;margin-top:30px">还没有动态，第一条由你来发～</p>'; return; }
       const byPost = {};
       (cmts || []).forEach((cm) => { (byPost[cm.post_id] = byPost[cm.post_id] || []).push(cm); });
@@ -1729,7 +1732,7 @@
           const cmine = cm.uid === c.uid;
           const cwho = cmine ? { nickname: S.nickname || '我', avatar: S.avatar || '🐣', gender: S.gender, vip: vipOn() } : cm;
           return `<div class="gd-cmt${cmine ? ' mine' : ''}">
-            <span class="cmt-ava">${esc(cwho.avatar || '🐣')}</span>
+            ${tapAva('cmt-ava', cwho, cmine)}
             <div class="cmt-col">
               <div class="cmt-who">${nameHtml(cwho)}${genderMark(cwho.gender)}</div>
               <div class="cmt-bub">${foldHtml(cm.body, 'c' + cm.id)}</div>
@@ -1745,7 +1748,7 @@
               <button data-csend="${m.id}">发送</button>
             </div>` : '';
         return `<div class="gd-item${mine ? ' mine' : ''}">
-          <span class="chat-ava">${esc(who.avatar || '🐣')}</span>
+          ${tapAva('chat-ava', who, mine)}
           <div class="msg-col">
             <div class="chat-who ${mine ? 'r' : ''}">${nameHtml(who)}${genderMark(who.gender)}<span class="gd-left">🌷 ${gardenLeftDays(ts)} 天后消失</span></div>
             <div class="gd-post">
@@ -1761,7 +1764,7 @@
           </div>
         </div>`;
       }).join('');
-      body.scrollTop = body.scrollHeight;
+      body.scrollTop = prevTop;   /* 顶部 = 最新；刷新时保持原位 */
 
       /* 折叠/展开长文本 */
       $$('.gd-fold').forEach((bt) => {
@@ -1838,17 +1841,17 @@
       });
     };
 
-    const load = async () => {
+    const load = async (mode) => {
       try {
         const [arr, cm] = await Promise.all([sbRpc('pk_garden_fetch', {}), sbRpc('pk_garden_cmts_fetch', {})]);
-        draw(arr || [], cm || []);
+        draw(arr || [], cm || [], mode === 'keep');
       } catch (err) {
         body.innerHTML = '<p class="muted tiny" style="text-align:center;margin-top:30px">花园加载失败，稍后再试</p>';
       }
     };
-    load();
+    load();                                      /* 首次进入：顶部看最新动态 */
     if (gardenTimer) clearInterval(gardenTimer);
-    gardenTimer = setInterval(load, 15000);
+    gardenTimer = setInterval(() => load('keep'), 15000);   /* 自动刷新：保持当前位置 */
 
     const setPend = () => {
       const pd = $('#gardenPend');
@@ -2364,6 +2367,99 @@
   const genderMark = (g) => g === 'girl' ? '<i class="g-mark g-girl">♀</i>' : g === 'boy' ? '<i class="g-mark g-boy">♂</i>' : '';
   const nameHtml = (p, cls) => `<b class="${cls || ''}${p.vip ? ' vip-name' : ''}">${esc(p.nickname)}${p.vip ? ' <span class="vip-mini">VIP</span>' : ''}</b>`;
 
+  /* ---------------- 点头像：玩家操作卡片 ----------------
+     群聊消息 / 花园动态 / 花园评论里，点别人的头像都能弹。
+     chat-ov 的 z-index 是 1600，普通 sheet(60) 会被盖住，
+     所以这里用独立的 pc-mask(2000)。 */
+  function tapAva(cls, who, mine) {
+    const av = esc(who.avatar || '🐣');
+    if (mine || !who.uid) return `<span class="${cls}">${av}</span>`;
+    return `<span class="${cls} tap-ava" data-uid="${esc(who.uid)}" data-nick="${esc(who.nickname || '玩家')}" data-ava="${av}" data-gender="${esc(who.gender || 'boy')}" data-vip="${who.vip ? 1 : 0}" title="加好友 / 私信 / 拉黑 / 移除">${av}</span>`;
+  }
+
+  function closePlayerCard() {
+    const m = $('#pcMask');
+    if (m) m.remove();
+  }
+
+  async function openPlayerCard(peer) {
+    if (!peer || !peer.uid || peer.uid === cloudId().uid) return;
+    const c = cloudId();
+    let isFriend = false, isBlocked = false;
+    try {
+      const [fr, bl] = await Promise.all([
+        sbRpc('pk_my_friends', { p_uid: c.uid, p_token: c.token }).catch(() => []),
+        sbRpc('pk_block_list', { p_uid: c.uid, p_token: c.token }).catch(() => []),
+      ]);
+      isFriend = (fr || []).some((x) => x.uid === peer.uid);
+      isBlocked = (bl || []).some((x) => x.blocked_uid === peer.uid);
+    } catch (err) { /* 离线也能打开，状态按默认显示 */ }
+
+    const mask = document.createElement('div');
+    mask.id = 'pcMask';
+    mask.className = 'pc-mask';
+    mask.innerHTML = `<div class="pc-card">
+      <div class="pc-head">
+        <span class="pc-ava">${esc(peer.avatar || '🐣')}</span>
+        <div class="pc-info">${nameHtml(peer)}${genderMark(peer.gender)}
+          <small>${peer.vip ? '尊贵会员' : '小伙伴'}</small></div>
+        <button class="pc-x" id="pcClose" aria-label="关闭">✕</button>
+      </div>
+      <div class="sheet-actions col">
+        <button class="btn btn-primary btn-lg" id="pcAdd"${isFriend ? ' disabled' : ''}>${isFriend ? '✅ 已是好友' : '＋ 添加好友'}</button>
+      </div>
+      <div class="pc-acts">
+        <button class="fr-btn" id="pcDm">💬 私信</button>
+        <button class="fr-btn ghost" id="pcBlock">${isBlocked ? '✅ 已拉黑' : '🚫 拉黑'}</button>
+        <button class="fr-btn ghost" id="pcDel">移除</button>
+      </div>
+      <p class="muted tiny" style="text-align:center;margin:12px 0 0">点别人的头像，随时可以管理 TA</p>
+    </div>`;
+    closePlayerCard();
+    document.body.appendChild(mask);
+    requestAnimationFrame(() => mask.classList.add('in'));
+    mask.onclick = (e) => { if (e.target === mask) closePlayerCard(); };
+    $('#pcClose').onclick = closePlayerCard;
+    if (isBlocked) $('#pcBlock').dataset.on = '1';
+
+    $('#pcAdd').onclick = async () => {
+      try {
+        const r = await sbRpc('pk_add_friend', { p_uid: c.uid, p_token: c.token, p_friend: peer.uid });
+        if (r && r.ok) { $('#pcAdd').textContent = '✅ 已添加'; $('#pcAdd').disabled = true; toast('加好啦', '🤝'); }
+        else if (r && r.err === 'self') toast('这是你自己呀', '🙃');
+        else toast('没加上，再试一次', '⚠️');
+      } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+    };
+    $('#pcDm').onclick = () => { closePlayerCard(); openDm(peer); };
+    $('#pcBlock').onclick = async () => {
+      const on = $('#pcBlock').dataset.on === '1';
+      if (await toggleBlock(peer, !on)) {
+        $('#pcBlock').dataset.on = on ? '' : '1';
+        $('#pcBlock').textContent = on ? '🚫 拉黑' : '✅ 已拉黑';
+      }
+    };
+    $('#pcDel').onclick = async () => {
+      try {
+        await sbRpc('pk_del_friend', { p_uid: c.uid, p_token: c.token, p_friend: peer.uid });
+        toast('已移除', '👋');
+        closePlayerCard();
+      } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+    };
+  }
+
+  /* 一次性全局委托：列表重绘后新头像也能点 */
+  document.addEventListener('click', (e) => {
+    const av = e.target && e.target.closest && e.target.closest('.tap-ava');
+    if (!av || !av.dataset.uid) return;
+    openPlayerCard({
+      uid: av.dataset.uid,
+      nickname: av.dataset.nick || '玩家',
+      avatar: av.dataset.ava || '🐣',
+      gender: av.dataset.gender || 'boy',
+      vip: av.dataset.vip === '1',
+    });
+  });
+
   /* 打开和某人的私信聊天（全屏层） */
   let dmTimer = null, dmPeer = null;
   async function openDm(peer) {
@@ -2701,7 +2797,7 @@
         const isVip = mine ? vipOn() : !!m.vip;
         if (isFlower && !mine && !firstBatch) toast(`${m.nickname || '有人'} 送了一颗专属红心`, '❤️');
         html += `<div class="chat-msg ${mine ? 'mine' : ''}">
-          <span class="chat-ava">${esc2(who.avatar || '🐣')}</span>
+          ${tapAva('chat-ava', who, mine)}
           <div class="msg-col">
             <div class="chat-who ${mine ? 'r' : ''}">${nameHtml(who)}${genderMark(who.gender)}</div>
             <div class="chat-bub ${mine ? 'mine-bub' : 'them'}${isFlower ? ' heart-bub' : ''}${isVip && !isFlower ? ' vip-text' : ''}">${isFlower ? '<span class="fx-heart">❤️</span>' : esc2(m.body)}</div>
