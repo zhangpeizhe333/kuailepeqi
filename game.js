@@ -159,7 +159,8 @@
       <p class="sheet-sub">「快乐佩奇：戒烟戒酒跟我走」申请获取你的昵称和头像</p>
       <div class="wx-accounts">${rows || '<p class="muted tiny" style="text-align:center;padding:10px 0">还没有登录记录，新建一个吧</p>'}</div>
       <button class="wx-new" id="wxNew"><span>＋</span>新建一个存档</button>
-      <p class="muted tiny" style="text-align:center;margin-top:12px">每个存档相互独立，换一个就是换一份坚持</p>`);
+      <button class="wx-recover" id="wxRecover">🛟 用找回码找回存档</button>
+      <p class="muted tiny" style="text-align:center;margin-top:12px">一键登录存本机，重装前先在菜单里保存找回码</p>`);
     $$('.wx-pick').forEach((b) => b.addEventListener('click', () => {
       const acc = DB.accounts[b.dataset.wx];
       if (acc && acc.acct) { closeSheet(); return openAcctLogin(acc.acct); }
@@ -170,6 +171,7 @@
     }));
     $$('.wx-del').forEach((b) => b.addEventListener('click', () => delAccount(b.dataset.del)));
     $('#wxNew').onclick = openRegForm;
+    $('#wxRecover').onclick = openRecoverLogin;
   }
   /* 删除登录记录时同步清除云端资料：好友搜索、好友列表、社区成员都会一起消失。
      云端函数 pk_delete_account 未部署时，退一步把昵称改成「已注销xxxx」，至少搜不到旧昵称 */
@@ -244,6 +246,82 @@
       setTimeout(() => { toast(`欢迎你，${nick}！`, '🎉'); enterApp(); }, 150);
     };
   }
+  /* ---------------- 存档找回码（一键登录数据 · 重装/换机可凭码找回） ---------------- */
+  async function ensureRecCode() {
+    if (!S || S.acct) return null;
+    if (S.recCode) return S.recCode;
+    try {
+      const c = cloudId();
+      const r = await sbRpc('pk_ensure_rec_code', { p_uid: c.uid, p_token: c.token });
+      if (r && r.ok && r.code) { S.recCode = r.code; persist(); return r.code; }
+    } catch (e) {}
+    return null;
+  }
+  function recCodeSheet() {
+    const show = () => {
+      sheet(`<h3>🛟 存档找回码</h3>
+        <p class="sheet-sub">重装 App、清除数据或换手机后，在登录页点「用找回码找回存档」输入这个码，打卡记录、会员都会回来</p>
+        <div class="rec-code">${esc(S.recCode || '')}</div>
+        <div class="sheet-actions">
+          <button class="btn btn-ghost" id="recCopy">复制找回码</button>
+          <button class="btn btn-primary" id="recOk">知道了</button>
+        </div>
+        <p class="muted tiny" style="text-align:center;margin-top:8px">记得截图保存 · 码给别人，别人就能拿走这份记录</p>`);
+      $('#recCopy').onclick = async () => { await copyText(S.recCode); toast('找回码已复制', '🛟'); };
+      $('#recOk').onclick = closeSheet;
+    };
+    if (S.recCode) return show();
+    sheet(`<h3>🛟 存档找回码</h3><p class="sheet-sub">正在生成…</p>`);
+    ensureRecCode().then((code) => {
+      if (code) show();
+      else { closeSheet(); toast('生成失败，稍后再试', '⚠️'); }
+    });
+  }
+  function applyRecover(r) {
+    const key = 'wx_recover_' + r.uid;
+    let acc = DB.accounts[key];
+    if (!acc) {
+      acc = fixSave(freshSave());
+      acc.wx = { wxid: key, nick: r.nickname || '玩家' };
+      acc.nickname = r.nickname || '玩家';
+      acc.avatar = r.avatar || '🐣';
+      acc.gender = r.gender === 'girl' ? 'girl' : 'boy';
+      restoreDays(acc, r);
+    }
+    acc.cloud = { uid: r.uid, token: r.token };
+    if (r.rec_code) acc.recCode = r.rec_code;
+    if (r.vip && (!acc.vip || (acc.vip.until || 0) < Date.now())) {
+      acc.vip = { until: Date.now() + 30 * DAY, plan: '找回恢复', code: '' };
+    }
+    acc.acct = acc.acct || '';
+    DB.accounts[key] = acc;
+    DB.current = key;
+    S = acc;
+    persist(); closeSheet();
+    setTimeout(() => { toast('存档找回来啦！', '🛟'); enterApp(); }, 150);
+  }
+  function openRecoverLogin() {
+    sheet(`<h3>🛟 用找回码找回存档</h3>
+      <p class="sheet-sub">输入之前保存的找回码，这份记录就会回到这台手机</p>
+      <div class="form">
+        <input id="recInput" maxlength="16" placeholder="例如 KP1A2B3C4D" autocomplete="off" autocapitalize="characters">
+        <button class="btn btn-primary btn-lg" id="recGo" style="margin-top:10px">找回并登录</button>
+      </div>`);
+    const go = $('#recGo');
+    $('#recInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') go.click(); });
+    setTimeout(() => { const i = $('#recInput'); if (i) i.focus(); }, 60);
+    go.onclick = async () => {
+      const code = $('#recInput').value.trim().toUpperCase();
+      if (!code) return toast('把找回码粘进来', '🛟');
+      go.disabled = true;
+      try {
+        const r = await sbRpc('pk_recover', { p_code: code });
+        if (r && r.ok) applyRecover(r);
+        else { go.disabled = false; toast('没有找到对应的存档，检查一下码', '⚠️'); }
+      } catch (e) { go.disabled = false; toast('连不上云端，检查一下网络', '📡'); }
+    };
+  }
+
   /* ---------------- 账号密码登录（与本地一键登录并存） ---------------- */
   function restoreDays(acc, r) {
     const now = Date.now();
@@ -385,6 +463,8 @@
     if (window.QuitMusic && QuitMusic.enabled()) QuitMusic.play();
     /* 静默把昵称和天数同步到云端，好友才搜得到 */
     setTimeout(() => { if (S && S.nickname) sbSync().catch(() => {}); }, 2500);
+    /* 静默生成存档找回码，重装/换机可凭码找回 */
+    setTimeout(() => { ensureRecCode(); }, 4000);
     /* 私信提醒：马上查一次，之后每 30 秒查一次 */
     setTimeout(dmCheck, 3000);
     if (dmPollTimer) clearInterval(dmPollTimer);
@@ -1363,7 +1443,7 @@
             <button class="act" id="playBtn">${sleepy ? '🎈 叫醒佩奇' : '🎈 玩耍'}</button>
             <button class="act primary" id="cheerPeki">💖 鼓励佩奇</button>
           </div>`}
-      <button class="btn btn-ghost btn-lg garden-btn" id="gardenBtn">🌷 佩奇的神秘花园</button>
+      <div class="dock dock-garden"><button class="act garden-act" id="gardenBtn">🌷 神秘花园</button></div>
       <div class="card">
         <h3>🤫 跟佩奇说悄悄话（${S.msgs.length}/5）</h3>
         <div class="form">
@@ -1541,13 +1621,16 @@
       <div class="garden-tip">发一条动态，7 天后自动消失，所有人进花园都看得到</div>
       <div class="chat-body garden-body" id="gardenBody"><p class="muted tiny" style="text-align:center;margin-top:30px">正在走进花园…</p></div>
       <div class="garden-pend hidden" id="gardenPend"></div>
+      <div class="pic-choose hidden" id="picChoose">
+        <button id="picTake">📸 拍照</button>
+        <button id="picAlbum">🖼️ 从手机相册选择</button>
+      </div>
       <div class="chat-input">
-        <button class="garden-pic" id="gardenCam" title="拍照">📷</button>
-        <button class="garden-pic" id="gardenAlbum" title="从相册选择">🖼️</button>
+        <button class="garden-pic" id="gardenPic" title="添加照片">📷</button>
         <input id="gardenText" maxlength="200" placeholder="和大家分享你的坚持…" autocomplete="off">
         <button id="gardenSend">发布</button>
-        <input type="file" id="gardenFileCam" accept="image/*" capture="environment" class="hidden">
-        <input type="file" id="gardenFileAlbum" accept="image/*" class="hidden">
+        <input type="file" id="gardenFileCam" accept="image/*" capture="environment" class="file-off">
+        <input type="file" id="gardenFileAlbum" accept="image/*" class="file-off">
       </div>`;
     document.body.appendChild(ov);
     const body = $('#gardenBody');
@@ -1601,13 +1684,14 @@
           <span class="chat-ava">${esc(who.avatar || '🐣')}</span>
           <div class="msg-col">
             <div class="chat-who ${mine ? 'r' : ''}">${nameHtml(who)}${genderMark(who.gender)}<span class="gd-left">🌷 ${gardenLeftDays(ts)} 天后消失</span></div>
-            <div class="gd-post">${textHtml}${imgHtml}</div>
-            <div class="gd-actions">
-              <button class="gd-like${liked ? ' on' : ''}" data-like="${m.id}">👍${m.likes ? ' ' + m.likes : ''}</button>
-              <button class="gd-cmtbtn" data-cbtn="${m.id}">💬${list.length ? ' ' + list.length : ''}</button>
-              ${mine ? `<button class="gd-del" data-id="${m.id}">删</button>` : ''}
+            <div class="gd-post">${textHtml}${imgHtml}
+              <div class="gd-actions">
+                <button class="gd-like${liked ? ' on' : ''}" data-like="${m.id}">👍${m.likes ? ' ' + m.likes : ''}</button>
+                <button class="gd-cmtbtn" data-cbtn="${m.id}">💬${list.length ? ' ' + list.length : ''}</button>
+                ${mine ? `<button class="gd-del" data-id="${m.id}">删</button>` : ''}
+              </div>
+              <div class="gd-cmts">${cmtHtml}${more}${cmtRow}</div>
             </div>
-            <div class="gd-cmts">${cmtHtml}${more}${cmtRow}</div>
           </div>
         </div>`;
       }).join('');
@@ -1716,7 +1800,7 @@
       pd.classList.toggle('hidden', !pending.length);
       pd.innerHTML = pending.map((x, i) => `<img src="${x}" alt=""><button data-pd="${i}" title="移除图片">✕</button>`).join('');
       $$('#gardenPend [data-pd]').forEach((bt) => { bt.onclick = () => { pending.splice(parseInt(bt.dataset.pd, 10), 1); setPend(); }; });
-      $$('#gardenCam,#gardenAlbum').forEach((bt) => bt.classList.toggle('has', pending.length >= 2));
+      $('#gardenPic').classList.toggle('has', pending.length >= 2);
     };
     const addFile = (f) => {
       if (!f) return;
@@ -1729,9 +1813,12 @@
         toast('图片已选好，点发布', '📷');
       });
     };
-    $('#gardenCam').onclick = () => $('#gardenFileCam').click();
-    $('#gardenAlbum').onclick = () => $('#gardenFileAlbum').click();
-    [['#gardenFileCam'], ['#gardenFileAlbum']].forEach(([sel]) => {
+    /* 点 📷 弹出选择条：拍照 / 手机相册 */
+    const picCh = $('#picChoose');
+    $('#gardenPic').onclick = () => picCh.classList.toggle('hidden');
+    $('#picTake').onclick = () => { picCh.classList.add('hidden'); $('#gardenFileCam').click(); };
+    $('#picAlbum').onclick = () => { picCh.classList.add('hidden'); $('#gardenFileAlbum').click(); };
+    ['#gardenFileCam', '#gardenFileAlbum'].forEach((sel) => {
       $(sel).onchange = (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; addFile(f); };
     });
 
@@ -2798,6 +2885,7 @@
           <button class="menu-row" id="mShare"><span>🔗</span><div><b>分享链接</b><small>复制网页链接或安装包链接</small></div></button>
           <button class="menu-row" id="mVip"><span>🎫</span><div><b>会员中心</b><small>${vipOn() ? '已开通 · 还剩 ' + vipLeftDays() + ' 天' : '输入激活码开通'}</small></div></button>
           <button class="menu-row" id="mAccount"><span>🔑</span><div><b>${S.acct ? '我的账号' : '账号密码登录'}</b><small>${S.acct ? esc(S.acct) + ' · 换手机可找回记录' : '登录后换手机也能找回打卡记录'}</small></div></button>
+          ${S.acct ? '' : `<button class="menu-row" id="mRecCode"><span>🛟</span><div><b>存档找回码</b><small>${S.recCode ? esc(S.recCode) : '重装 / 换手机后凭码找回这份记录'}</small></div></button>`}
           <button class="menu-row" id="mService"><span>💬</span><div><b>联系客服</b><small>加微信，问题随时找我</small></div></button>
           <button class="menu-row" id="mLang"><span>🌐</span><div><b>Language / 语言</b><small>English · 中文</small></div></button>
           <button class="menu-row danger" id="mLogout"><span>🚪</span><div><b>退出登录</b><small>记录会保留，可重新登录</small></div></button>
@@ -2807,6 +2895,8 @@
       $('#mShare').onclick = shareSheet;
       $('#mVip').onclick = vipSheet;
       $('#mAccount').onclick = () => { if (S.acct) accountSheet(); else openAcctLogin(); };
+      const mrc = $('#mRecCode');
+      if (mrc) mrc.onclick = recCodeSheet;
       $('#mFriends').onclick = friendsSheet;
       $('#mService').onclick = serviceSheet;
       const ml = $('#mLang');
