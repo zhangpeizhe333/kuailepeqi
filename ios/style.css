@@ -963,8 +963,12 @@ h3 small { font-weight: 400; }
 }
 
 /* 佩奇的神秘花园（公共动态 · 文字+两图 · 点赞评论 · 7 天过期） */
-.dock-garden { margin-top: 8px; }
-.dock-garden .garden-act { color: #d8b45e; border-color: rgba(255, 212, 121, .35); }
+/* 花园按钮与「鼓励佩奇」同宽同高 */
+.dock-garden { margin-top: 8px; grid-template-columns: 1fr; }
+.dock-garden .garden-act {
+  grid-column: 1 / -1; padding: 12px 6px; font-size: 15px; font-weight: 800;
+  color: #d8b45e; border-color: rgba(255, 212, 121, .35);
+}
 .garden-tip {
   flex: none; padding: 8px 14px; font-size: 11.5px; line-height: 1.5; color: var(--muted);
   background: rgba(255, 212, 121, .07); border-top: 1px solid var(--line); text-align: center;
@@ -972,14 +976,24 @@ h3 small { font-weight: 400; }
 .garden-body { background: linear-gradient(180deg, rgba(94, 195, 138, .06), rgba(255, 212, 121, .05)); }
 .gd-item { display: flex; gap: 6px; align-items: flex-start; margin-bottom: 16px; max-width: 96%; }
 .gd-item.mine { margin-left: auto; flex-direction: row-reverse; }
+/* 外层大框：包住「动态小框 + 评论区」 */
 .gd-post {
-  margin-top: 4px; padding: 8px 12px; border-radius: 14px; overflow: hidden;
-  background: linear-gradient(160deg, rgba(94, 195, 138, .14), rgba(94, 195, 138, .06));
-  border: 1px solid rgba(94, 195, 138, .32); max-width: 260px; width: fit-content;
+  margin-top: 4px; padding: 7px; border-radius: 16px; overflow: hidden;
+  background: rgba(255, 255, 255, .025);
+  border: 1px solid rgba(94, 195, 138, .34); max-width: 292px; width: fit-content;
 }
 .gd-item.mine .gd-post {
+  background: rgba(255, 212, 121, .045); border-color: rgba(255, 212, 121, .4);
+}
+/* 内层小框：动态文字 / 照片 + 点赞、评论、删除按钮 */
+.gd-core {
+  padding: 8px 10px 9px; border-radius: 11px;
+  background: linear-gradient(160deg, rgba(94, 195, 138, .16), rgba(94, 195, 138, .06));
+  border: 1px solid rgba(94, 195, 138, .3);
+}
+.gd-item.mine .gd-core {
   background: linear-gradient(160deg, rgba(255, 212, 121, .2), rgba(255, 190, 110, .08));
-  border-color: rgba(255, 212, 121, .4);
+  border-color: rgba(255, 212, 121, .38);
 }
 .gd-text { font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
 .gd-imgs { display: flex; gap: 6px; margin-top: 6px; }
@@ -1003,10 +1017,12 @@ h3 small { font-weight: 400; }
   transition: transform .12s, background .12s;
 }
 .gd-actions button:active { transform: scale(.92); }
-.gd-actions .gd-like.on, .gd-clike.on { color: #ff7d95; border-color: rgba(255, 125, 149, .5); background: rgba(255, 125, 149, .12); }
+.gd-actions .gd-like.on { color: #ff7d95; border-color: rgba(255, 125, 149, .5); background: rgba(255, 125, 149, .12); }
 .gd-actions .gd-del { margin-left: auto; }
-.gd-cmts { margin-top: 8px; display: flex; flex-direction: column; gap: 7px; }
-.gd-cmt { display: flex; gap: 6px; align-items: flex-start; max-width: 100%; }
+/* 评论区：每条之间用虚线分隔 */
+.gd-cmts { margin-top: 8px; padding: 0 4px 2px; display: flex; flex-direction: column; }
+.gd-cmt { display: flex; gap: 6px; align-items: flex-start; max-width: 100%; padding: 8px 0; }
+.gd-cmt + .gd-cmt { border-top: 1px dashed rgba(255, 255, 255, .14); }
 .gd-cmt.mine { margin-left: auto; flex-direction: row-reverse; }
 .cmt-ava {
   flex: none; width: 22px; height: 22px; border-radius: 8px; font-size: 13px; line-height: 22px; text-align: center;
@@ -1019,12 +1035,10 @@ h3 small { font-weight: 400; }
   background: rgba(255, 255, 255, .07); border: 1px solid var(--line); word-break: break-word; white-space: pre-wrap;
 }
 .gd-item.mine .cmt-bub { background: rgba(255, 212, 121, .13); border-color: rgba(255, 212, 121, .32); }
-.gd-clike { flex: none; align-self: center; padding: 3px 9px; border-radius: 999px; font-size: 11.5px;
-  color: var(--muted); background: rgba(255, 255, 255, .06); border: 1px solid var(--line); }
 .gd-del { padding: 3px 9px; border-radius: 999px; font-size: 11px; color: var(--muted);
   background: rgba(255, 255, 255, .06); border: 1px solid var(--line); align-self: center; }
-.gd-more { align-self: flex-start; padding: 0; border: none; background: none; font-size: 12px; font-weight: 700; color: #d8b45e; cursor: pointer; }
-.gd-cmtrow { display: flex; gap: 6px; margin-top: 2px; }
+.gd-more { align-self: flex-start; margin-top: 6px; padding: 0; border: none; background: none; font-size: 12px; font-weight: 700; color: #d8b45e; cursor: pointer; }
+.gd-cmtrow { display: flex; gap: 6px; margin-top: 8px; }
 .gd-cmtrow input {
   flex: 1; min-width: 0; padding: 7px 11px; border-radius: 999px; font-size: 12.5px;
   border: 1px solid var(--line); background: rgba(255, 255, 255, .06); color: var(--text);
@@ -1036,25 +1050,20 @@ h3 small { font-weight: 400; }
   border-top: 1px solid var(--line);
 }
 .garden-pend.hidden { display: none; }
-.pic-choose { flex: none; display: flex; gap: 8px; padding: 10px 12px 2px; }
-.pic-choose.hidden { display: none; }
-.pic-choose button {
-  flex: 1; padding: 11px 6px; border-radius: 13px; font-size: 13.5px; font-weight: 700;
-  color: var(--text); background: var(--card2); border: 1px solid var(--line);
-  transition: transform .12s;
-}
-.pic-choose button:active { transform: scale(.95); }
-.garden-pend img {
-  width: 46px; height: 46px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line);
-}
-.garden-pend button {
-  padding: 4px 9px; border-radius: 999px; font-size: 12px; color: var(--muted);
-  background: rgba(255, 255, 255, .07); border: 1px solid var(--line);
-}
+.garden-pend img { width: 46px; height: 46px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+.garden-pend button { padding: 4px 9px; border-radius: 999px; font-size: 12px; color: var(--muted);
+  background: rgba(255, 255, 255, .07); border: 1px solid var(--line); }
+/* 📷 是一个真正可见可点的透明 file input，安卓 WebView 才能拉起系统相机/媒体选择器 */
 .chat-input .garden-pic {
+  position: relative; overflow: hidden; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
   width: 42px; flex: none; padding: 0; font-size: 16px; line-height: 1;
   background: rgba(255, 255, 255, .08); border: 1px solid var(--line);
   color: var(--text); transition: transform .12s, background .12s;
+}
+.chat-input .garden-pic .file-real {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; cursor: pointer; font-size: 0;
 }
 .chat-input .garden-pic:active { transform: scale(.93); }
 .chat-input .garden-pic.has { background: linear-gradient(135deg, #ffe9a8, #efbb45); }
