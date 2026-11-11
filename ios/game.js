@@ -17,8 +17,9 @@
   }
 
   const DB_KEY = 'quitwalk_accounts_v1';
-  /* 可选聊天头像（会员可自选，其它人随机分配） */
+  /* 可选聊天头像（全员可自选；🐰🐯🦁🦄 为会员专属，随机分配时跳过） */
   const AVATARS = ['🐣', '🐰', '🐻', '🦊', '🐼', '🐨', '🐯', '🦁', '🐮', '🐸', '🐷', '🐵', '🐶', '🐱', '🦄', '🐧'];
+  const VIP_AVATARS = ['🐰', '🐯', '🦁', '🦄'];
 
   let DB = null;
   let S = null;
@@ -236,7 +237,7 @@
       S = fixSave(freshSave());
       S.wx = { wxid: 'wx_' + Date.now().toString(36), nick };
       S.nickname = nick; S.gender = gender; S.age = age;
-      S.avatar = pick(AVATARS);
+      S.avatar = pick(AVATARS.filter((a) => !VIP_AVATARS.includes(a)));
       DB.accounts[S.wx.wxid] = S;
       DB.current = S.wx.wxid;
       persist(); closeSheet();
@@ -1527,7 +1528,7 @@
   }
 
   function gardenLeftDays(ts) {
-    return Math.max(1, Math.ceil((ts + GARDEN_TTL - Date.now()) / DAY));
+    return Math.max(1, Math.round((ts + GARDEN_TTL - Date.now()) / DAY));
   }
 
   function openGarden() {
@@ -2617,31 +2618,32 @@
       <div class="form"><label>昵称</label>
         <input id="nickInput" maxlength="12" value="${esc(S.nickname || '')}" placeholder="给自己起个名字"></div>
       <div class="ava-pick">
-        <div class="ava-pick-head"><b>聊天头像</b>${vip ? '<span class="vip-mini">VIP</span>' : '<span class="ava-lock">会员可自定义</span>'}</div>
-        ${vip
-          ? `<div class="ava-grid" id="avaGrid">${AVATARS.map((a) => `<button class="ava-opt${a === pickAva ? ' on' : ''}" data-a="${a}">${a}</button>`).join('')}</div>`
-          : `<div class="ava-lock-row"><span class="ava-opt on">${esc(pickAva)}</span><p>开通会员后，可在这里自己挑聊天头像</p><button id="avaVip">去开通</button></div>`}
+        <div class="ava-pick-head"><b>聊天头像</b>${vip ? '<span class="vip-mini">VIP</span>' : '<span class="ava-lock">👑 = 会员专属</span>'}</div>
+        <div class="ava-grid" id="avaGrid">${AVATARS.map((a) => {
+          const vipOnly = VIP_AVATARS.includes(a);
+          return `<button class="ava-opt${a === pickAva ? ' on' : ''}${vipOnly ? ' vip-ava' : ''}" data-a="${a}" title="${vipOnly ? '会员专属' : ''}">${a}${vipOnly && !vip ? '<i class="ava-crown">👑</i>' : ''}</button>`;
+        }).join('')}</div>
       </div>
       <button class="btn btn-primary btn-lg" id="nickSave" style="margin-top:14px">保存</button>`);
     const inp = $('#nickInput');
     setTimeout(() => { inp.focus(); inp.select(); }, 60);
-    if (vip) {
-      $$('#avaGrid .ava-opt').forEach((b) => {
-        b.onclick = () => {
-          pickAva = b.dataset.a;
-          $$('#avaGrid .ava-opt').forEach((x) => x.classList.toggle('on', x === b));
-        };
-      });
-    } else {
-      const lk = $('#avaVip');
-      if (lk) lk.onclick = () => { closeSheet(); setTimeout(vipSheet, 240); };
-    }
+    $$('#avaGrid .ava-opt').forEach((b) => {
+      b.onclick = () => {
+        if (!vip && VIP_AVATARS.includes(b.dataset.a)) {
+          anim(b, 'shake');
+          return toast('这是会员专属头像，开通会员才能用', '👑');
+        }
+        pickAva = b.dataset.a;
+        $$('#avaGrid .ava-opt').forEach((x) => x.classList.toggle('on', x === b));
+      };
+    });
     $('#nickSave').onclick = () => {
       const v = inp.value.trim();
       if (!v) return toast('昵称不能为空', '✏️');
-      const avaChanged = vip && pickAva !== (S.avatar || '🐣');
+      if (!vip && VIP_AVATARS.includes(pickAva)) pickAva = S.avatar || '🐣';
+      const avaChanged = pickAva !== (S.avatar || '🐣');
       S.nickname = v;
-      if (vip) S.avatar = pickAva;
+      S.avatar = pickAva;
       persist();
       closeSheet();
       const nb2 = $('#nickBtn');
