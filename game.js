@@ -32,7 +32,66 @@
     try { DB = JSON.parse(localStorage.getItem(DB_KEY)) || null; } catch (e) { DB = null; }
     if (!DB || typeof DB !== 'object' || !DB.accounts) DB = { current: null, accounts: {} };
   }
-  function persist() { localStorage.setItem(DB_KEY, JSON.stringify(DB)); }
+  function persist() {
+    if (S) S.updatedAt = Date.now();
+    localStorage.setItem(DB_KEY, JSON.stringify(DB));
+    scheduleSavePush();
+  }
+
+  /* ---------------- 同账号三端存档同步（整份存档上云） ----------------
+     以前云端只存昵称和打卡天数，佩奇状态/闹钟/日历/悄悄话/积分全在本机，
+     所以同一个账号在网页、iOS、安卓登录后各是各的。现在整份存档按账号存，
+     改动后 1.5 秒静默上传，登录和切回前台时拉云端最新的一份。         */
+  let savePushTimer = null, lastPushAt = 0;
+  function scheduleSavePush() {
+    if (!S || !S.acct) return;                 /* 只有账号密码登录的存档才云同步 */
+    clearTimeout(savePushTimer);
+    savePushTimer = setTimeout(savePush, 1500);
+  }
+  async function savePush() {
+    if (!S || !S.acct) return;
+    /* 时间戳一律用本机当前时间，不沿用云端时间，避免设备时间不准卡死同步 */
+    const ts = Date.now();
+    if (ts - lastPushAt < 800) return;         /* 短时间内的重复请求合并掉 */
+    lastPushAt = ts;
+    S.updatedAt = ts;
+    localStorage.setItem(DB_KEY, JSON.stringify(DB));
+    const c = cloudId();
+    try {
+      await sbRpc('pk_save_push', {
+        p_uid: c.uid, p_token: c.token,
+        p_save: S, p_ts: ts,
+      });
+    } catch (e) { /* 离线就先留在本机，下次再传 */ }
+  }
+  async function savePullAndApply(silent) {
+    if (!S || !S.acct) return;
+    const c = cloudId();
+    let r;
+    try { r = await sbRpc('pk_save_pull', { p_uid: c.uid, p_token: c.token }); }
+    catch (e) { return; }                              /* 云端还没开同步就先不动 */
+    if (!r || !r.ok) return;
+    if (!r.save) { savePush(); return; }               /* 云端还没有这份存档，建立第一份 */
+    const ts = Number(r.ts) || 0;
+    /* 本机更新或一样新：什么都不做，本机改动已由 persist 自动上传，
+       不能在这里用本机旧存档去覆盖云端 */
+    if (ts <= (Number(S.updatedAt) || 0)) return;
+    /* 云端更新：正在弹层里输入时不打断，下次切回前台再同步 */
+    if (!silent && document.querySelector('.sheet-mask')) return;
+    /* 整份覆盖，但保留本机的账号与云端凭据 */
+    const keep = { acct: S.acct, cloud: S.cloud, recCode: S.recCode };
+    const merged = fixSave(Object.assign({}, r.save, keep));
+    /* 取两边较大值，避免某台设备时钟偏慢导致下次同步反复覆盖 */
+    merged.updatedAt = Math.max(ts, Date.now());
+    DB.accounts[DB.current] = merged;
+    S = merged;
+    localStorage.setItem(DB_KEY, JSON.stringify(DB));   /* 不调 persist，保留云端时间戳 */
+    if (typeof render === 'function' && document.getElementById('app') && !document.getElementById('app').classList.contains('hidden')) render();
+    if (!silent) toast('已从云端同步最新记录', '☁️');
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && S && S.acct) savePullAndApply();
+  });
   function freshSave() {
     return {
       wx: null, nickname: '', gender: 'boy', age: '', signature: '无语中..', avatar: '🐣',
@@ -42,7 +101,7 @@
       vip: { until: 0 }, vipFree: { d: '', used: false }, cloud: null, acct: '',
       peki: { charm: 0, lastFeed: 0, lastTease: 0, ghostUntil: 0, bigUntil: 0, girlUntil: 0, ptUntil: 0, dead: false },
       clock: { target: 0 },
-      createdAt: Date.now()
+      createdAt: Date.now(), updatedAt: 0
     };
   }
   function fixSave(s) {
@@ -346,8 +405,12 @@
     DB.accounts[key] = acc;
     DB.current = key;
     S = acc;
-    persist(); closeSheet();
-    setTimeout(() => { toast(`欢迎回来，${acc.nickname}！`, '🎉'); enterApp(); }, 150);
+    /* 先不刷新本机时间戳，才能正确判断云端是否有更新的存档 */
+    localStorage.setItem(DB_KEY, JSON.stringify(DB));
+    closeSheet();
+    /* 后台拉同账号其它设备的记录（拉到更新数据时会自动重绘，不阻塞登录） */
+    savePullAndApply(true);
+    setTimeout(() => { toast(`欢迎回来，${S.nickname}！`, '🎉'); enterApp(); }, 150);
   }
   function acctErrMsg(err, mode) {
     const map = {
@@ -465,6 +528,8 @@
     if (window.QuitMusic && QuitMusic.enabled()) QuitMusic.play();
     /* 静默把昵称和天数同步到云端，好友才搜得到 */
     setTimeout(() => { if (S && S.nickname) sbSync().catch(() => {}); }, 2500);
+    /* 同账号三端同步：已有本机存档直接进 App 时，也拉一次云端最新记录 */
+    setTimeout(() => { if (S && S.acct) savePullAndApply(true); }, 1200);
     /* 静默生成存档找回码，重装/换机可凭码找回 */
     setTimeout(() => { ensureRecCode(); }, 4000);
     /* 私信提醒：马上查一次，之后每 30 秒查一次 */
@@ -1615,6 +1680,8 @@
     const ov = document.createElement('div');
     ov.className = 'chat-ov';
     ov.id = 'gardenOv';
+    /* App 内走原生相机接口，网页 / iOS 走系统文件选择 */
+    const hasNativeCam = !!(window.NativeCam && window.NativeCam.pick);
     ov.innerHTML = `
       <div class="chat-top">
         <button class="chat-back" id="gardenBack">←</button>
@@ -1624,9 +1691,9 @@
       <div class="chat-body garden-body" id="gardenBody"><p class="muted tiny" style="text-align:center;margin-top:30px">正在走进花园…</p></div>
       <div class="garden-pend hidden" id="gardenPend"></div>
       <div class="chat-input">
-        <label class="garden-pic" id="gardenPic" title="添加照片">📷
-          <input type="file" id="gardenFile" accept="image/*" class="file-real">
-        </label>
+        ${hasNativeCam
+          ? '<button class="garden-pic" id="gardenPic" title="添加照片">📷</button>'
+          : '<label class="garden-pic" id="gardenPic" title="添加照片">📷<input type="file" id="gardenFile" accept="image/*" class="file-real"></label>'}
         <input id="gardenText" maxlength="200" placeholder="和大家分享你的坚持…" autocomplete="off">
         <button id="gardenSend">发布</button>
       </div>`;
@@ -1802,8 +1869,20 @@
         toast('图片已选好，点发布', '📷');
       });
     };
-    /* 点 📷 直接调起系统相机 / 媒体选择工具（安卓 App 由 WebChromeClient 接管） */
-    $('#gardenFile').onchange = (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; addFile(f); };
+    /* 📷 直接调起系统相机 / 媒体选择工具，不再出现二级按钮 */
+    if (hasNativeCam) {
+      /* 原生层把压缩好的 dataURL 送回来 */
+      window.__onNativePic = (d) => {
+        if (!d) return toast('没取到图片，再试一次', '📷');
+        if (pending.length >= 2) return toast('一次最多发两张图片', '📷');
+        pending.push(d);
+        setPend();
+        toast('图片已选好，点发布', '📷');
+      };
+      $('#gardenPic').onclick = () => window.NativeCam.pick();
+    } else {
+      $('#gardenFile').onchange = (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; addFile(f); };
+    }
 
     const post = async () => {
       const el = $('#gardenText');
@@ -1830,6 +1909,7 @@
 
     $('#gardenBack').onclick = () => {
       if (gardenTimer) { clearInterval(gardenTimer); gardenTimer = null; }
+      if (hasNativeCam) window.__onNativePic = null;
       ov.remove();
     };
   }
