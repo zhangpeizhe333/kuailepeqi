@@ -1200,3 +1200,5 @@ h3 small { font-weight: 400; }
   -webkit-text-fill-color: #3d2808;
 }
 .tap-ava:active { transform: scale(.9); }
+/* 已是好友：不显示 ＋ 角标（头像仍可点开卡片管理） */
+.tap-ava.fr::after { display: none; }
