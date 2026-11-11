@@ -501,6 +501,8 @@
     '花园加载失败，稍后再试': "Couldn't load the garden — try later",
     '图片已选好，点发布': 'Photo ready — tap Post',
     '图片太大，换一张小点的': 'Photo too large — pick a smaller one',
+    '没取到图片，再试一次': "Couldn't get the photo — try again",
+    '已从云端同步最新记录': 'Synced your latest data from the cloud',
     '只能发图片哦': 'Images only',
     '发得太快啦，休息一下再发': 'Too fast — take a short break first',
     '移除图片': 'Remove photo',
