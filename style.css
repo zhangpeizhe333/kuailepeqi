@@ -26,6 +26,7 @@ html, body {
 button { font-family: inherit; font-size: inherit; color: inherit; border: none; background: none; cursor: pointer; }
 input { font-family: inherit; }
 .hidden { display: none !important; }
+.file-off { position: fixed; left: -2000px; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .muted { color: var(--muted); }
 .tiny { font-size: 12px; }
 .gold { color: var(--gold); }
@@ -962,7 +963,8 @@ h3 small { font-weight: 400; }
 }
 
 /* 佩奇的神秘花园（公共动态 · 文字+两图 · 点赞评论 · 7 天过期） */
-.garden-btn { margin-top: 12px; }
+.dock-garden { margin-top: 8px; }
+.dock-garden .garden-act { color: #d8b45e; border-color: rgba(255, 212, 121, .35); }
 .garden-tip {
   flex: none; padding: 8px 14px; font-size: 11.5px; line-height: 1.5; color: var(--muted);
   background: rgba(255, 212, 121, .07); border-top: 1px solid var(--line); text-align: center;
@@ -994,7 +996,7 @@ h3 small { font-weight: 400; }
   display: inline-block; margin-left: 6px; padding: 0; border: none; background: none;
   font-size: 12px; font-weight: 700; color: #d8b45e; cursor: pointer;
 }
-.gd-actions { display: flex; gap: 8px; margin-top: 6px; align-items: center; }
+.gd-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
 .gd-actions button {
   padding: 4px 12px; border-radius: 999px; font-size: 12px; color: var(--muted);
   background: rgba(255, 255, 255, .06); border: 1px solid var(--line);
@@ -1028,12 +1030,20 @@ h3 small { font-weight: 400; }
   border: 1px solid var(--line); background: rgba(255, 255, 255, .06); color: var(--text);
 }
 .gd-cmtrow button { flex: none; padding: 7px 13px; border-radius: 999px; font-size: 12px; font-weight: 700;
-  color: #244a33; background: linear-gradient(135deg, #b7ecc9, #7fd8a0); }
+  color: #ffffff; background: linear-gradient(135deg, #b7ecc9, #7fd8a0); text-shadow: 0 1px 2px rgba(0,0,0,.18); }
 .garden-pend {
   flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px 0;
   border-top: 1px solid var(--line);
 }
 .garden-pend.hidden { display: none; }
+.pic-choose { flex: none; display: flex; gap: 8px; padding: 10px 12px 2px; }
+.pic-choose.hidden { display: none; }
+.pic-choose button {
+  flex: 1; padding: 11px 6px; border-radius: 13px; font-size: 13.5px; font-weight: 700;
+  color: var(--text); background: var(--card2); border: 1px solid var(--line);
+  transition: transform .12s;
+}
+.pic-choose button:active { transform: scale(.95); }
 .garden-pend img {
   width: 46px; height: 46px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line);
 }
@@ -1048,6 +1058,19 @@ h3 small { font-weight: 400; }
 }
 .chat-input .garden-pic:active { transform: scale(.93); }
 .chat-input .garden-pic.has { background: linear-gradient(135deg, #ffe9a8, #efbb45); }
+
+/* 存档找回码 */
+.rec-code {
+  margin: 14px auto 4px; padding: 14px 18px; text-align: center;
+  font-size: 24px; font-weight: 800; letter-spacing: 2px; color: var(--gold);
+  background: rgba(255, 212, 121, .09); border: 1px dashed rgba(255, 212, 121, .45);
+  border-radius: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.wx-recover {
+  display: flex; align-items: center; justify-content: center; width: 100%;
+  margin-top: 10px; padding: 11px; border-radius: 12px; font-size: 13.5px; font-weight: 600;
+  color: #d8b45e; background: rgba(255, 212, 121, .08); border: 1px dashed rgba(255, 212, 121, .4);
+}
 
 /* 修改昵称 · 聊天头像（会员可自选） */
 .ava-pick { margin-top: 14px; }
