@@ -1765,6 +1765,7 @@
         </div>`;
       }).join('');
       body.scrollTop = prevTop;   /* 顶部 = 最新；刷新时保持原位 */
+      markFriendAvas();           /* 已是好友的头像：隐藏 ＋ 角标 */
 
       /* 折叠/展开长文本 */
       $$('.gd-fold').forEach((bt) => {
@@ -1850,6 +1851,7 @@
       }
     };
     load();                                      /* 首次进入：顶部看最新动态 */
+    refreshFriends();                            /* 拉好友名单：已是好友的头像不显示 ＋ */
     if (gardenTimer) clearInterval(gardenTimer);
     gardenTimer = setInterval(() => load('keep'), 15000);   /* 自动刷新：保持当前位置 */
 
@@ -2377,6 +2379,23 @@
     return `<span class="${cls} tap-ava" data-uid="${esc(who.uid)}" data-nick="${esc(who.nickname || '玩家')}" data-ava="${av}" data-gender="${esc(who.gender || 'boy')}" data-vip="${who.vip ? 1 : 0}" title="加好友 / 私信 / 拉黑">${av}</span>`;
   }
 
+  /* 已是好友的头像不显示黄色 ＋ 角标（点开卡片仍是「移除」） */
+  let friendSet = null;
+  async function refreshFriends() {
+    const c = cloudId();
+    try {
+      const fr = await sbRpc('pk_my_friends', { p_uid: c.uid, p_token: c.token });
+      friendSet = new Set((fr || []).map((x) => x.uid));
+      markFriendAvas();
+    } catch (err) { /* 拉不到就保持现状，不影响显示 */ }
+  }
+  function markFriendAvas() {
+    if (!friendSet) return;
+    document.querySelectorAll('.tap-ava[data-uid]').forEach((el) => {
+      el.classList.toggle('fr', friendSet.has(el.dataset.uid));
+    });
+  }
+
   function closePlayerCard() {
     const m = $('#pcMask');
     if (m) m.remove();
@@ -2393,6 +2412,7 @@
       ]);
       isFriend = (fr || []).some((x) => x.uid === peer.uid);
       isBlocked = (bl || []).some((x) => x.blocked_uid === peer.uid);
+      friendSet = new Set((fr || []).map((x) => x.uid));
     } catch (err) { /* 离线也能打开，状态按默认显示 */ }
 
     const mask = document.createElement('div');
@@ -2428,6 +2448,8 @@
       b.dataset.on = friend ? '1' : '';
       b.className = 'btn btn-lg ' + (friend ? 'btn-ghost' : 'btn-primary');
       b.textContent = friend ? '移除' : '＋ 添加好友';
+      if (friendSet) { friend ? friendSet.add(peer.uid) : friendSet.delete(peer.uid); }
+      markFriendAvas();          /* 头像上的 ＋ 角标跟好友状态实时同步 */
     };
     paintAdd(isFriend);
 
@@ -2822,7 +2844,7 @@
         </div>`;
       }
       firstBatch = false;
-      if (html) { body.insertAdjacentHTML('beforeend', html); body.scrollTop = body.scrollHeight; }
+      if (html) { body.insertAdjacentHTML('beforeend', html); body.scrollTop = body.scrollHeight; markFriendAvas(); }
     };
     const load = async () => {
       try {
@@ -2833,6 +2855,7 @@
       } catch (err) { /* 静默重试 */ }
     };
     await load();
+    refreshFriends();
     commTimer = setInterval(load, 4000);
 
     $('#commBack').onclick = () => {   /* 返回只是收起，不退出社区 */
