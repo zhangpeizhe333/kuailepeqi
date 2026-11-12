@@ -1969,6 +1969,26 @@
     $('#shCancel').onclick = closeSheet;
   }
 
+  /* ---------------- 联系我们（邮箱，替代微信客服） ---------------- */
+  const CONTACT_MAIL = 'Zhangpeizhe333@gmail.com';
+  function contactSheet() {
+    sheet(`<h3>✉️ 联系我们</h3>
+      <p class="sheet-sub">有建议、想合作、遇到问题，都可以发邮件给我</p>
+      <div class="wx-card">
+        <span class="wx-card-ico">✉️</span>
+        <div><small>邮箱</small><b>${CONTACT_MAIL}</b></div>
+      </div>
+      <div class="sheet-actions col">
+        <button class="btn btn-primary btn-lg" id="ctCopy">📋 复制邮箱</button>
+        <button class="btn btn-ghost btn-lg" id="ctOk">知道啦</button>
+      </div>`);
+    $('#ctCopy').onclick = async () => {
+      const ok = await copyText(CONTACT_MAIL);
+      toast(ok ? '邮箱已复制' : '复制失败，请手动输入', ok ? '📋' : '⚠️');
+    };
+    $('#ctOk').onclick = closeSheet;
+  }
+
   /* ---------------- iOS 内购（StoreKit 2） ---------------- */
   const IAP_SKUS = {
     vip_month: { days: 30, plan: '30 天' },
@@ -3100,6 +3120,7 @@
           <button class="menu-row" id="mVip"><span>🎫</span><div><b>会员中心</b><small>${vipOn() ? '已开通 · 还剩 ' + vipLeftDays() + ' 天' : '购买或兑换开通'}</small></div></button>
           <button class="menu-row" id="mAccount"><span>🔑</span><div><b>${S.acct ? '我的账号' : '账号密码登录'}</b><small>${S.acct ? esc(S.acct) + ' · 换手机可找回记录' : '登录后换手机也能找回打卡记录'}</small></div></button>
           ${S.acct ? '' : `<button class="menu-row" id="mRecCode"><span>🛟</span><div><b>存档找回码</b><small>${S.recCode ? esc(S.recCode) : '重装 / 换手机后凭码找回这份记录'}</small></div></button>`}
+          <button class="menu-row" id="mContact"><span>✉️</span><div><b>联系我们</b><small>Zhangpeizhe333@gmail.com</small></div></button>
           <button class="menu-row" id="mLang"><span>🌐</span><div><b>Language / 语言</b><small>English · 中文</small></div></button>
           <button class="menu-row danger" id="mLogout"><span>🚪</span><div><b>退出登录</b><small>记录会保留，可重新登录</small></div></button>
         </div>`);
@@ -3109,6 +3130,7 @@
       const mrc = $('#mRecCode');
       if (mrc) mrc.onclick = recCodeSheet;
       $('#mFriends').onclick = friendsSheet;
+      $('#mContact').onclick = contactSheet;
       const ml = $('#mLang');
       if (ml && window.KKI18N) ml.onclick = () => KKI18N.sheet(sheet, closeSheet);
       $('#mLogout').onclick = logout;
