@@ -1215,6 +1215,8 @@ h3 small { font-weight: 400; }
 .vip-price > .vip-buy b { display: block; font-size: 20px; color: var(--gold); }
 .vip-price > .vip-buy small { color: var(--muted); font-size: 11px; }
 .iap-note { margin: 8px 0 0; font-size: 11.5px; color: var(--muted); text-align: center; line-height: 1.6; }
+/* 海外版联系卡片：邮箱较长，允许折行防截断 */
+.wx-card b { word-break: break-all; font-size: 15px; }
 
 /* ===== iOS 版：黄色按钮防压暗（加强版，全部 !important） =====
    Safari 在整页被声明为深色时会把亮色按钮自动调成灰黄，禁用按钮还会被
