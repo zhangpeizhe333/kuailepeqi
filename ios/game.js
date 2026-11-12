@@ -42,17 +42,20 @@
      以前云端只存昵称和打卡天数，佩奇状态/闹钟/日历/悄悄话/积分全在本机，
      所以同一个账号在网页、iOS、安卓登录后各是各的。现在整份存档按账号存，
      改动后 1.5 秒静默上传，登录和切回前台时拉云端最新的一份。         */
-  let savePushTimer = null, lastPushAt = 0;
+  let savePushTimer = null, lastPushAt = 0, saveDirty = false;
+  /* 云同步诊断：菜单「云同步」面板直接显示每一步状态，卡在哪一眼能看出来 */
+  const SYNC = { up: 0, down: 0, cloudTs: 0, note: '', err: '' };
   function scheduleSavePush() {
     if (!S || !S.acct) return;                 /* 只有账号密码登录的存档才云同步 */
+    saveDirty = true;
     clearTimeout(savePushTimer);
     savePushTimer = setTimeout(savePush, 1500);
   }
-  async function savePush() {
+  async function savePush(force) {
     if (!S || !S.acct) return;
     /* 时间戳一律用本机当前时间，不沿用云端时间，避免设备时间不准卡死同步 */
     const ts = Date.now();
-    if (ts - lastPushAt < 800) return;         /* 短时间内的重复请求合并掉 */
+    if (!force && ts - lastPushAt < 800) return;   /* 短时间内的重复请求合并掉 */
     lastPushAt = ts;
     S.updatedAt = ts;
     localStorage.setItem(DB_KEY, JSON.stringify(DB));
@@ -62,20 +65,31 @@
         p_uid: c.uid, p_token: c.token,
         p_save: S, p_ts: ts,
       });
-    } catch (e) { /* 离线就先留在本机，下次再传 */ }
+      saveDirty = false;
+      SYNC.up = Date.now(); SYNC.err = ''; SYNC.note = '已上传本机记录';
+    } catch (e) {
+      SYNC.err = '上传失败：' + ((e && e.message) || e);
+      /* 断网/失败：改动留在本机，15 秒后自动重试（下次联网也会补传），不会丢 */
+      if (saveDirty) setTimeout(() => { if (saveDirty) savePush(); }, 15000);
+    }
   }
   async function savePullAndApply(silent) {
     if (!S || !S.acct) return;
     const c = cloudId();
     let r;
     try { r = await sbRpc('pk_save_pull', { p_uid: c.uid, p_token: c.token }); }
-    catch (e) { return; }                              /* 云端还没开同步就先不动 */
-    if (!r || !r.ok) return;
-    if (!r.save) { savePush(); return; }               /* 云端还没有这份存档，建立第一份 */
+    catch (e) { SYNC.err = '拉取失败：' + ((e && e.message) || e); return; }
+    if (!r || !r.ok) { SYNC.err = '云端返回异常'; return; }
+    if (!r.save) { SYNC.note = '云端还没有这份存档，已上传本机'; savePush(true); return; }
     const ts = Number(r.ts) || 0;
-    /* 本机更新或一样新：什么都不做，本机改动已由 persist 自动上传，
+    SYNC.cloudTs = ts;
+    /* 本机更新或一样新：把断网时攒下的改动补传上去（之前失败/没来得及传的），
        不能在这里用本机旧存档去覆盖云端 */
-    if (ts <= (Number(S.updatedAt) || 0)) return;
+    if (ts <= (Number(S.updatedAt) || 0)) {
+      SYNC.note = '本机较新，保留本机记录';
+      if (saveDirty) savePush();
+      return;
+    }
     /* 云端更新：正在弹层里输入时不打断，下次切回前台再同步 */
     if (!silent && document.querySelector('.sheet-mask')) return;
     /* 整份覆盖，但保留本机的账号与云端凭据 */
@@ -86,17 +100,71 @@
       keep.signature = S.signature;
     }
     const merged = fixSave(Object.assign({}, r.save, keep));
-    /* 取两边较大值，避免某台设备时钟偏慢导致下次同步反复覆盖 */
-    merged.updatedAt = Math.max(ts, Date.now());
+    /* 时间戳沿用云端的，不能取 Date.now()：否则拉取完本机就"显得最新"，
+       同一会话里后续拉取会被误判成「本机较新」而跳过 */
+    merged.updatedAt = ts;
     DB.accounts[DB.current] = merged;
     S = merged;
+    saveDirty = false;                                  /* 云端这份已经是最新，无需再传 */
     localStorage.setItem(DB_KEY, JSON.stringify(DB));   /* 不调 persist，保留云端时间戳 */
     if (typeof render === 'function' && document.getElementById('app') && !document.getElementById('app').classList.contains('hidden')) render();
+    SYNC.down = Date.now(); SYNC.err = ''; SYNC.note = '已拉取云端最新记录';
     if (!silent) toast('已从云端同步最新记录', '☁️');
   }
+  /* 手动立即同步：先上传本机（若待传），再拉云端 */
+  async function syncNow() {
+    if (!S || !S.acct) return;
+    await savePush(true);
+    await savePullAndApply(true);
+  }
+  function fmtTs(t) {
+    if (!t) return '—';
+    const d = new Date(t), p = (n) => ('0' + n).slice(-2);
+    return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+  function syncSheet() {
+    const show = () => {
+      const rows = [
+        ['登录方式', S.acct ? '账号密码登录（支持云同步）' : '一键登录 / 游客（只存本机，不同步）'],
+        ['账号', S.acct || '—'],
+        ['本机最后改动', fmtTs(S.updatedAt)],
+        ['上次上传成功', fmtTs(SYNC.up) + (saveDirty ? ' · 有改动待上传' : '')],
+        ['上次拉取云端', fmtTs(SYNC.down)],
+        ['云端记录时间', fmtTs(SYNC.cloudTs)],
+        ['最近结果', SYNC.note || '—'],
+        ['错误', SYNC.err || '无'],
+      ];
+      const html = rows.map(([k, v]) =>
+        `<div class="sync-row"><span>${esc(k)}</span><b>${esc(String(v))}</b></div>`).join('');
+      sheet(`<h3>☁️ 云同步</h3>
+        <p class="sheet-sub">同一账号在多台设备之间同步打卡、签名、会员等记录。云端以最后修改的那台设备为准。</p>
+        <div class="sync-box">${html}</div>
+        ${S.acct ? '' : '<p class="sheet-sub" style="margin-top:10px">当前是一键登录（游客）存档，数据只在本机，永远不会同步。要用同步请先登录账号。</p>'}
+        <div class="sheet-actions col">
+          ${S.acct ? '<button class="btn btn-primary btn-lg" id="syncNow">立即同步</button>'
+                   : '<button class="btn btn-primary btn-lg" id="syncLogin">账号密码登录</button>'}
+          <button class="btn btn-ghost btn-lg" id="syncOk">知道了</button>
+        </div>`);
+      const sn = $('#syncNow');
+      if (sn) sn.onclick = async () => {
+        sn.disabled = true; sn.textContent = '同步中…';
+        await syncNow();
+        show();
+        toast(SYNC.err ? '同步失败，看下方错误' : '已同步', SYNC.err ? '⚠️' : '☁️');
+      };
+      const sl = $('#syncLogin');
+      if (sl) sl.onclick = () => { closeSheet(); openAcctLogin(); };
+      $('#syncOk').onclick = closeSheet;
+    };
+    show();
+  }
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && S && S.acct) savePullAndApply();
+    if (!document.hidden && S && S.acct) savePullAndApply();  /* 切回前台：先拉云端最新，本机有没传上去的会自动补传 */
   });
+  /* 断网时攒下的改动，网络一恢复就补传 */
+  window.addEventListener('online', () => { if (S && S.acct && saveDirty) savePush(); });
+  /* 离开页面/锁屏前尽量把改动发出去；来不及也没关系，切回前台会补传 */
+  document.addEventListener('pagehide', () => { if (S && S.acct && saveDirty) savePush(); });
   function freshSave() {
     return {
       wx: null, nickname: '', gender: 'boy', age: '', signature: { smoke: '无语中..', alcohol: '无语中..', fit: '无语中..' }, avatar: '🐣',
@@ -117,7 +185,12 @@
       const old = (typeof s.signature === 'string' && s.signature.trim()) || '无语中..';
       s.signature = { smoke: old, alcohol: old, fit: old };
     }
-    for (const k of ['smoke', 'alcohol', 'fit']) if (typeof s.signature[k] !== 'string' || !s.signature[k].trim()) s.signature[k] = '无语中..';
+    for (const k of ['smoke', 'alcohol', 'fit']) {
+      if (typeof s.signature[k] !== 'string' || !s.signature[k].trim()) s.signature[k] = '无语中..';
+      /* 英文界面保存时，翻译层会把输入框里的默认签名「无语中..」改写成 Speechless..；
+         存档里一律存中文原句（显示时才翻译），否则切回中文会看到英文 */
+      else if (s.signature[k] === 'Speechless..') s.signature[k] = '无语中..';
+    }
     /* 补签记录：老存档可能没有，补齐三个模块的数组 */
     if (!s.makeup || typeof s.makeup !== 'object') s.makeup = { smoke: [], alcohol: [], fit: [] };
     for (const k of ['smoke', 'alcohol', 'fit']) if (!Array.isArray(s.makeup[k])) s.makeup[k] = [];
@@ -3119,6 +3192,7 @@
           <button class="menu-row" id="mShare"><span>🔗</span><div><b>分享链接</b><small>复制网页链接或安装包链接</small></div></button>
           <button class="menu-row" id="mVip"><span>🎫</span><div><b>会员中心</b><small>${vipOn() ? '已开通 · 还剩 ' + vipLeftDays() + ' 天' : '购买或兑换开通'}</small></div></button>
           <button class="menu-row" id="mAccount"><span>🔑</span><div><b>${S.acct ? '我的账号' : '账号密码登录'}</b><small>${S.acct ? esc(S.acct) + ' · 换手机可找回记录' : '登录后换手机也能找回打卡记录'}</small></div></button>
+          ${new URLSearchParams(location.search).has('sync') ? `<button class="menu-row" id="mSync"><span>☁️</span><div><b>云同步</b><small>同步状态诊断（调试入口）</small></div></button>` : ''}
           ${S.acct ? '' : `<button class="menu-row" id="mRecCode"><span>🛟</span><div><b>存档找回码</b><small>${S.recCode ? esc(S.recCode) : '重装 / 换手机后凭码找回这份记录'}</small></div></button>`}
           <button class="menu-row" id="mContact"><span>✉️</span><div><b>联系我们</b><small>Zhangpeizhe333@gmail.com</small></div></button>
           <button class="menu-row" id="mLang"><span>🌐</span><div><b>Language / 语言</b><small>English · 中文</small></div></button>
@@ -3127,6 +3201,8 @@
       $('#mShare').onclick = shareSheet;
       $('#mVip').onclick = vipSheet;
       $('#mAccount').onclick = () => { if (S.acct) accountSheet(); else openAcctLogin(); };
+      const ms = $('#mSync');
+      if (ms) ms.onclick = syncSheet;
       const mrc = $('#mRecCode');
       if (mrc) mrc.onclick = recCodeSheet;
       $('#mFriends').onclick = friendsSheet;
@@ -3157,7 +3233,13 @@
     setInterval(() => { if (S && tab === 'peki' && !$('.sheet-mask')) updatePekiBtns(); }, 1000);
 
     const cur = DB.current && DB.accounts[DB.current];
-    if (cur) { S = fixSave(cur); enterApp(); persist(); } else showLogin();
+    if (cur) {
+      S = fixSave(cur);
+      enterApp();
+      /* 启动时只落盘、不刷新时间戳：一旦在这里刷新，本机永远显得比云端「新」，
+         云端有更新也永远拉不下来（多设备全都不同步的根因就在这） */
+      localStorage.setItem(DB_KEY, JSON.stringify(DB));
+    } else showLogin();
   }
 
   document.addEventListener('DOMContentLoaded', boot);
