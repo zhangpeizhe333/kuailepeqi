@@ -12,6 +12,14 @@
     '快乐佩奇': 'Quit Smoke & Drink',
     '戒烟戒酒跟我走': 'Quit Smoke & Drink With Me',
     '游戏制作：张佩喆': 'Made by Zhang Peizhe',
+    '© 2026 快乐佩奇': '© 2026 Happy Perry',
+    '联系我们': 'Contact us',
+    '✉️ 联系我们': '✉️ Contact us',
+    '有建议、想合作、遇到问题，都可以发邮件给我': 'Feedback, ideas or partnerships — just email me',
+    '邮箱': 'Email',
+    '📋 复制邮箱': '📋 Copy email',
+    '邮箱已复制': 'Email copied',
+    '复制失败，请手动输入': 'Copy failed, please type it manually',
     '断崖式戒烟 · 清醒戒酒 · 运动打卡': 'Cold-turkey quit · Sober living · Daily workouts',
     '让小朋友陪你一起变健康': 'A little buddy gets healthy with you',
     '首页': 'Home', '戒烟': 'Smoke-free', '戒酒': 'Sober', '运动': 'Workout',
@@ -220,6 +228,29 @@
     '分享链接': 'Share link',
     '复制网页链接或安装包链接': 'Copy the web link or APK link',
     '分享给朋友，或管理当前账号': 'Share with friends or manage your account',
+    /* 云同步诊断面板 */
+    '云同步': 'Cloud sync',
+    '账号已登录 · 查看状态 / 立即同步': 'Signed in · check status or sync now',
+    '一键登录只存本机 · 登录账号才能同步': 'One-tap saves stay local — sign in to sync',
+    '同一账号在多台设备之间同步打卡、签名、会员等记录。云端以最后修改的那台设备为准。': 'Sync check-ins, quote, VIP and more across devices on the same account. The last device to change something wins.',
+    '登录方式': 'Sign-in',
+    '账号密码登录（支持云同步）': 'Account login (sync on)',
+    '一键登录 / 游客（只存本机，不同步）': 'One-tap / guest (this device only, no sync)',
+    '本机最后改动': 'Last local change',
+    '上次上传成功': 'Last upload',
+    '有改动待上传': ' · pending upload',
+    '上次拉取云端': 'Last cloud pull',
+    '云端记录时间': 'Cloud record time',
+    '最近结果': 'Last result',
+    '错误': 'Error', '无': 'None',
+    '立即同步': 'Sync now', '同步中…': 'Syncing…', '已同步': 'Synced',
+    '同步失败，看下方错误': 'Sync failed — see error below',
+    '已上传本机记录': 'Uploaded local save',
+    '云端还没有这份存档，已上传本机': 'No cloud save yet — uploaded local',
+    '本机较新，保留本机记录': 'Local is newer — kept local',
+    '已拉取云端最新记录': 'Pulled latest from cloud',
+    '云端返回异常': 'Unexpected cloud response',
+    '当前是一键登录（游客）存档，数据只在本机，永远不会同步。要用同步请先登录账号。': 'This is a one-tap (guest) save — it lives only on this device and never syncs. Sign in with an account to sync.',
     '会员中心': 'Membership',
     '输入激活码开通': 'Redeem a code to join',
     '购买或兑换开通': 'Buy or redeem to join',
@@ -376,7 +407,7 @@
     '📝 佩奇写给你的': '📝 A note from Perry',
     '还没有抽过小纸条，攒够 20 积分来抽一张吧': 'No notes yet — earn 20 points to draw one',
     '这张你之前抽到过啦，只记一次': 'Already have this one — counted once',
-    '会员今日免费次数已用': 'free VIP draw used today',
+    '会员今日免费次数已用': 'Free VIP draw used today',
 
     '在浏览器菜单里再点「下载安卓 App」就能下载安装啦': 'In the browser menu tap "Android App" to download & install',
 
@@ -660,7 +691,7 @@
     [/^脑袋已经很大了，魅力 \+1 · 魅力 (\d+)$/, 'Head already huge — charm +1 · total $1'],
     [/^女孩已经在啦，魅力 \+1 · 魅力 (\d+)$/, 'The girl is already here — charm +1 · total $1'],
     [/^这张你之前抽到过啦，只记一次.*$/, 'Already have this one — counted once'],
-    [/^当前累计打卡 (\d+) 天，打卡次数 \+ ?(\d+)。?$/, "Skipped days don't affect titles. Total: $1 days · +$2 per check-in"],
+    [/^当前累计打卡 (\d+) 天，打卡次数 \+ ?(\d+)。?$/, "Total check-in days: $1 · +$2 check-ins"],
     [/^🚭 加油，宝贝\s*⭐\+1$/, '🚭 Keep going, buddy! ⭐+1'],
     [/^🍺 加油，宝贝\s*⭐\+1$/, '🍺 Stay strong, buddy! ⭐+1'],
     [/^🏃 加油，宝贝\s*⭐\+1$/, '🏃 Keep moving, buddy! ⭐+1']
@@ -673,17 +704,17 @@
      PRICE_ANY = true 时（iOS），中文界面也用 PRICE 表显示美元价，
      但只影响充值弹窗那几个纯价格节点（¥8/¥88/¥188），
      打卡省钱等页面的 ¥ 保持不动 */
-  var CUR = '';
-  var PRICE = {};
-  var PRICE_ANY = false;
+  var CUR = '$';
+  var PRICE = { '¥8': '$1.99', '¥88': '$19.99', '¥188': '$39.99' };
+  var PRICE_ANY = true;
 
   function detect() {
     try {
       var s = localStorage.getItem('kk_lang');
       if (s === 'en' || s === 'zh') return s;
     } catch (e) {}
-    /* 网页 / 安卓默认中文；iOS 构建时会把下面一行替换为 return 'en'; */
-    return 'zh';
+    /* iOS 版默认英文 */
+    return 'en';
   }
   var LANG = detect();
 
@@ -745,8 +776,10 @@
     var els = root.querySelectorAll ? root.querySelectorAll('input,textarea,button,[title],[aria-label]') : [];
     for (var i = 0; i < els.length; i++) {
       var el = els[i];
-      /* 基本信息编辑框里的默认个性签名（input 的 value 属性不走文本遍历） */
-      if ((el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && el.value === '无语中..') el.value = 'Speechless..';
+      /* 基本信息编辑框里的默认个性签名（input 的 value 属性不走文本遍历）
+         只允许在英文界面改写：中文界面直接把「无语中..」改成英文，用户一保存
+         就把英文写进存档了（海外版 PRICE_ANY 会让中文界面也跑这里） */
+      if (LANG === 'en' && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && el.value === '无语中..') el.value = 'Speechless..';
       var as = ['placeholder', 'title', 'aria-label'];
       for (var j = 0; j < as.length; j++) {
         var v = el.getAttribute && el.getAttribute(as[j]);

@@ -1,4 +1,4 @@
-/* 戒烟戒酒跟我走 · 主逻辑（单机 · localStorage 存档 · 多微信账号） */
+/* 戒烟戒酒跟我走 · 主逻辑（单机 · localStorage 存档 · 多存档） */
 (function () {
   'use strict';
   const $ = (s) => document.querySelector(s);
@@ -42,17 +42,20 @@
      以前云端只存昵称和打卡天数，佩奇状态/闹钟/日历/悄悄话/积分全在本机，
      所以同一个账号在网页、iOS、安卓登录后各是各的。现在整份存档按账号存，
      改动后 1.5 秒静默上传，登录和切回前台时拉云端最新的一份。         */
-  let savePushTimer = null, lastPushAt = 0;
+  let savePushTimer = null, lastPushAt = 0, saveDirty = false;
+  /* 云同步诊断：菜单「云同步」面板直接显示每一步状态，卡在哪一眼能看出来 */
+  const SYNC = { up: 0, down: 0, cloudTs: 0, note: '', err: '' };
   function scheduleSavePush() {
     if (!S || !S.acct) return;                 /* 只有账号密码登录的存档才云同步 */
+    saveDirty = true;
     clearTimeout(savePushTimer);
     savePushTimer = setTimeout(savePush, 1500);
   }
-  async function savePush() {
+  async function savePush(force) {
     if (!S || !S.acct) return;
     /* 时间戳一律用本机当前时间，不沿用云端时间，避免设备时间不准卡死同步 */
     const ts = Date.now();
-    if (ts - lastPushAt < 800) return;         /* 短时间内的重复请求合并掉 */
+    if (!force && ts - lastPushAt < 800) return;   /* 短时间内的重复请求合并掉 */
     lastPushAt = ts;
     S.updatedAt = ts;
     localStorage.setItem(DB_KEY, JSON.stringify(DB));
@@ -62,20 +65,31 @@
         p_uid: c.uid, p_token: c.token,
         p_save: S, p_ts: ts,
       });
-    } catch (e) { /* 离线就先留在本机，下次再传 */ }
+      saveDirty = false;
+      SYNC.up = Date.now(); SYNC.err = ''; SYNC.note = '已上传本机记录';
+    } catch (e) {
+      SYNC.err = '上传失败：' + ((e && e.message) || e);
+      /* 断网/失败：改动留在本机，15 秒后自动重试（下次联网也会补传），不会丢 */
+      if (saveDirty) setTimeout(() => { if (saveDirty) savePush(); }, 15000);
+    }
   }
   async function savePullAndApply(silent) {
     if (!S || !S.acct) return;
     const c = cloudId();
     let r;
     try { r = await sbRpc('pk_save_pull', { p_uid: c.uid, p_token: c.token }); }
-    catch (e) { return; }                              /* 云端还没开同步就先不动 */
-    if (!r || !r.ok) return;
-    if (!r.save) { savePush(); return; }               /* 云端还没有这份存档，建立第一份 */
+    catch (e) { SYNC.err = '拉取失败：' + ((e && e.message) || e); return; }
+    if (!r || !r.ok) { SYNC.err = '云端返回异常'; return; }
+    if (!r.save) { SYNC.note = '云端还没有这份存档，已上传本机'; savePush(true); return; }
     const ts = Number(r.ts) || 0;
-    /* 本机更新或一样新：什么都不做，本机改动已由 persist 自动上传，
+    SYNC.cloudTs = ts;
+    /* 本机更新或一样新：把断网时攒下的改动补传上去（之前失败/没来得及传的），
        不能在这里用本机旧存档去覆盖云端 */
-    if (ts <= (Number(S.updatedAt) || 0)) return;
+    if (ts <= (Number(S.updatedAt) || 0)) {
+      SYNC.note = '本机较新，保留本机记录';
+      if (saveDirty) savePush();
+      return;
+    }
     /* 云端更新：正在弹层里输入时不打断，下次切回前台再同步 */
     if (!silent && document.querySelector('.sheet-mask')) return;
     /* 整份覆盖，但保留本机的账号与云端凭据 */
@@ -86,17 +100,71 @@
       keep.signature = S.signature;
     }
     const merged = fixSave(Object.assign({}, r.save, keep));
-    /* 取两边较大值，避免某台设备时钟偏慢导致下次同步反复覆盖 */
-    merged.updatedAt = Math.max(ts, Date.now());
+    /* 时间戳沿用云端的，不能取 Date.now()：否则拉取完本机就"显得最新"，
+       同一会话里后续拉取会被误判成「本机较新」而跳过 */
+    merged.updatedAt = ts;
     DB.accounts[DB.current] = merged;
     S = merged;
+    saveDirty = false;                                  /* 云端这份已经是最新，无需再传 */
     localStorage.setItem(DB_KEY, JSON.stringify(DB));   /* 不调 persist，保留云端时间戳 */
     if (typeof render === 'function' && document.getElementById('app') && !document.getElementById('app').classList.contains('hidden')) render();
+    SYNC.down = Date.now(); SYNC.err = ''; SYNC.note = '已拉取云端最新记录';
     if (!silent) toast('已从云端同步最新记录', '☁️');
   }
+  /* 手动立即同步：先上传本机（若待传），再拉云端 */
+  async function syncNow() {
+    if (!S || !S.acct) return;
+    await savePush(true);
+    await savePullAndApply(true);
+  }
+  function fmtTs(t) {
+    if (!t) return '—';
+    const d = new Date(t), p = (n) => ('0' + n).slice(-2);
+    return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+  function syncSheet() {
+    const show = () => {
+      const rows = [
+        ['登录方式', S.acct ? '账号密码登录（支持云同步）' : '一键登录 / 游客（只存本机，不同步）'],
+        ['账号', S.acct || '—'],
+        ['本机最后改动', fmtTs(S.updatedAt)],
+        ['上次上传成功', fmtTs(SYNC.up) + (saveDirty ? ' · 有改动待上传' : '')],
+        ['上次拉取云端', fmtTs(SYNC.down)],
+        ['云端记录时间', fmtTs(SYNC.cloudTs)],
+        ['最近结果', SYNC.note || '—'],
+        ['错误', SYNC.err || '无'],
+      ];
+      const html = rows.map(([k, v]) =>
+        `<div class="sync-row"><span>${esc(k)}</span><b>${esc(String(v))}</b></div>`).join('');
+      sheet(`<h3>☁️ 云同步</h3>
+        <p class="sheet-sub">同一账号在多台设备之间同步打卡、签名、会员等记录。云端以最后修改的那台设备为准。</p>
+        <div class="sync-box">${html}</div>
+        ${S.acct ? '' : '<p class="sheet-sub" style="margin-top:10px">当前是一键登录（游客）存档，数据只在本机，永远不会同步。要用同步请先登录账号。</p>'}
+        <div class="sheet-actions col">
+          ${S.acct ? '<button class="btn btn-primary btn-lg" id="syncNow">立即同步</button>'
+                   : '<button class="btn btn-primary btn-lg" id="syncLogin">账号密码登录</button>'}
+          <button class="btn btn-ghost btn-lg" id="syncOk">知道了</button>
+        </div>`);
+      const sn = $('#syncNow');
+      if (sn) sn.onclick = async () => {
+        sn.disabled = true; sn.textContent = '同步中…';
+        await syncNow();
+        show();
+        toast(SYNC.err ? '同步失败，看下方错误' : '已同步', SYNC.err ? '⚠️' : '☁️');
+      };
+      const sl = $('#syncLogin');
+      if (sl) sl.onclick = () => { closeSheet(); openAcctLogin(); };
+      $('#syncOk').onclick = closeSheet;
+    };
+    show();
+  }
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && S && S.acct) savePullAndApply();
+    if (!document.hidden && S && S.acct) savePullAndApply();  /* 切回前台：先拉云端最新，本机有没传上去的会自动补传 */
   });
+  /* 断网时攒下的改动，网络一恢复就补传 */
+  window.addEventListener('online', () => { if (S && S.acct && saveDirty) savePush(); });
+  /* 离开页面/锁屏前尽量把改动发出去；来不及也没关系，切回前台会补传 */
+  document.addEventListener('pagehide', () => { if (S && S.acct && saveDirty) savePush(); });
   function freshSave() {
     return {
       wx: null, nickname: '', gender: 'boy', age: '', signature: { smoke: '无语中..', alcohol: '无语中..', fit: '无语中..' }, avatar: '🐣',
@@ -117,7 +185,12 @@
       const old = (typeof s.signature === 'string' && s.signature.trim()) || '无语中..';
       s.signature = { smoke: old, alcohol: old, fit: old };
     }
-    for (const k of ['smoke', 'alcohol', 'fit']) if (typeof s.signature[k] !== 'string' || !s.signature[k].trim()) s.signature[k] = '无语中..';
+    for (const k of ['smoke', 'alcohol', 'fit']) {
+      if (typeof s.signature[k] !== 'string' || !s.signature[k].trim()) s.signature[k] = '无语中..';
+      /* 英文界面保存时，翻译层会把输入框里的默认签名「无语中..」改写成 Speechless..；
+         存档里一律存中文原句（显示时才翻译），否则切回中文会看到英文 */
+      else if (s.signature[k] === 'Speechless..') s.signature[k] = '无语中..';
+    }
     /* 补签记录：老存档可能没有，补齐三个模块的数组 */
     if (!s.makeup || typeof s.makeup !== 'object') s.makeup = { smoke: [], alcohol: [], fit: [] };
     for (const k of ['smoke', 'alcohol', 'fit']) if (!Array.isArray(s.makeup[k])) s.makeup[k] = [];
@@ -212,7 +285,7 @@
   /* ---------------- 登录 ---------------- */
   function showLogin() { $('#login').classList.remove('hidden'); $('#app').classList.add('hidden'); }
   function openWxAuth() {
-    /* 一键登录只列本机微信存档，账号密码注册的账号不在这里显示（走「账号密码登录」按钮） */
+    /* 一键登录只列本机存档，账号密码注册的账号不在这里显示（走「账号密码登录」按钮） */
     const ids = Object.keys(DB.accounts).filter((id) => !id.startsWith('acct_'));
     const rows = ids.map((id) => {
       const a = DB.accounts[id];
@@ -226,7 +299,7 @@
       </div>`;
     }).join('');
     sheet(`<h3>一键登录</h3>
-      <p class="sheet-sub">「快乐佩奇：戒烟戒酒跟我走」申请获取你的昵称和头像</p>
+      <p class="sheet-sub">每个存档独立记录，换存档就是换一份坚持</p>
       <div class="wx-accounts">${rows || '<p class="muted tiny" style="text-align:center;padding:10px 0">还没有登录记录，新建一个吧</p>'}</div>
       <button class="wx-new" id="wxNew"><span>＋</span>新建一个存档</button>
       <button class="wx-recover" id="wxRecover">🛟 用找回码找回存档</button>
@@ -449,7 +522,7 @@
           <input id="acctNick" maxlength="12" placeholder="显示在好友列表里的名字"></div>
         <button class="btn btn-primary btn-lg" id="acctGo" style="margin-top:12px">登录</button>
       </div>
-      <p class="muted tiny" style="text-align:center;margin-top:10px">忘记密码找客服重置 · 账号只用来同步记录</p>`);
+      <p class="muted tiny" style="text-align:center;margin-top:10px">忘记密码无法找回，请记牢 · 账号只用来同步记录</p>`);
     let mode = 'login';
     const go = $('#acctGo');
     $$('#acctMode .seg-b').forEach((b) => b.addEventListener('click', () => {
@@ -1951,25 +2024,6 @@
     ta.remove();
     return ok;
   }
-  const APK_URL = 'https://zhangpeizhe333.github.io/kuailepeqi/kuailepeqi.apk';
-  function downloadApk() {
-    const inWx = /MicroMessenger/i.test(navigator.userAgent);
-    if (inWx) {
-      sheet(`<h3>📥 下载安卓 App</h3>
-        <p class="sheet-sub">微信里不能直接下载安装包，需要先换到浏览器</p>
-        <div class="rule-list">
-          <p><b>1.</b> 点右上角「···」</p>
-          <p><b>2.</b> 选择「在浏览器中打开」</p>
-          <p><b>3.</b> 在浏览器菜单里再点「下载安卓 App」就能下载安装啦</p>
-        </div>
-        <button class="btn btn-primary btn-lg" style="margin-top:14px" onclick="document.querySelector('.sheet-mask').remove()">知道啦</button>`);
-      return;
-    }
-    const a = document.createElement('a');
-    a.href = APK_URL; a.download = 'kuailepeqi.apk';
-    document.body.appendChild(a); a.click(); a.remove();
-    toast('安装包开始下载，下完点开安装', '📥');
-  }
 
   /* 分享链接：复制网页链接或安装包链接 */
   function shareSheet() {
@@ -1977,22 +2031,70 @@
       <p class="sheet-sub">选一个复制，粘贴给朋友就行</p>
       <div class="sheet-actions col">
         <button class="btn btn-primary btn-lg" id="shWeb">📋 复制网页链接</button>
-        <button class="btn btn-ghost btn-lg" id="shApk">📋 复制安装包（APK）链接</button>
         <button class="btn btn-ghost btn-lg" id="shCancel">取消</button>
       </div>
-      <p class="muted tiny" style="text-align:center;margin-top:10px">网页链接：点开就能玩 · 安装包链接：安卓用浏览器打开后下载安装</p>`);
+      <p class="muted tiny" style="text-align:center;margin-top:10px">粘贴给好友，点开就能玩</p>`);
     $('#shWeb').onclick = async () => {
       const ok = await copyText(gameUrl());
       closeSheet();
       toast(ok ? '网页链接已复制' : '复制失败，请手动复制', ok ? '🔗' : '⚠️');
     };
-    $('#shApk').onclick = async () => {
-      const ok = await copyText(APK_URL);
-      closeSheet();
-      toast(ok ? '安装包链接已复制' : '复制失败，请手动复制', ok ? '🔗' : '⚠️');
-    };
     $('#shCancel').onclick = closeSheet;
   }
+
+  /* ---------------- 联系我们（邮箱，替代微信客服） ---------------- */
+  const CONTACT_MAIL = 'Zhangpeizhe333@gmail.com';
+  function contactSheet() {
+    sheet(`<h3>✉️ 联系我们</h3>
+      <p class="sheet-sub">有建议、想合作、遇到问题，都可以发邮件给我</p>
+      <div class="wx-card">
+        <span class="wx-card-ico">✉️</span>
+        <div><small>邮箱</small><b>${CONTACT_MAIL}</b></div>
+      </div>
+      <div class="sheet-actions col">
+        <button class="btn btn-primary btn-lg" id="ctCopy">📋 复制邮箱</button>
+        <button class="btn btn-ghost btn-lg" id="ctOk">知道啦</button>
+      </div>`);
+    $('#ctCopy').onclick = async () => {
+      const ok = await copyText(CONTACT_MAIL);
+      toast(ok ? '邮箱已复制' : '复制失败，请手动输入', ok ? '📋' : '⚠️');
+    };
+    $('#ctOk').onclick = closeSheet;
+  }
+
+  /* ---------------- iOS 内购（StoreKit 2） ---------------- */
+  const IAP_SKUS = {
+    vip_month: { days: 30, plan: '30 天' },
+    vip_year: { days: 365, plan: '1 年' },
+    vip_forever: { days: 36500, plan: '永久' },
+  };
+  function iapApply(sku, txId) {
+    const p = IAP_SKUS[sku];
+    if (!p) return;
+    const base = Math.max(Date.now(), (S.vip && S.vip.until) || 0);
+    S.vip = { until: base + p.days * DAY, code: 'iap_' + (txId || sku), plan: p.plan };
+    S.vipFree = { d: '', used: false };
+    persist();
+    render();
+    toast(`开通成功，${p.plan}会员已生效`, '🎉');
+    setTimeout(vipSheet, 500);
+  }
+  function iapBuy(sku) {
+    if (!window.KKIAP || !window.KKIAP.available()) return toast('请在 App Store 版本中购买', 'ℹ️');
+    window.KKIAP.buy(sku);
+  }
+  function iapRestore() {
+    if (!window.KKIAP || !window.KKIAP.available()) return toast('请在 App Store 版本中恢复购买', 'ℹ️');
+    window.KKIAP.restore();
+  }
+  /* 原生层回调：{type:'bought'|'restored'|'cancel'|'empty'|'error', sku, tx} */
+  window.__iapResult = function (r) {
+    if (!r) return;
+    if (r.type === 'bought' || r.type === 'restored') iapApply(r.sku, r.tx);
+    else if (r.type === 'cancel') toast('已取消购买', 'ℹ️');
+    else if (r.type === 'empty') toast('没有可恢复的购买记录', 'ℹ️');
+    else if (r.type === 'error') toast('购买没成功，稍后再试', '⚠️');
+  };
 
   /* ---------------- 会员 · 激活码 ---------------- */
   const VIP_ALPHA = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -2043,7 +2145,7 @@
           <div><b>${esc(S.vip.plan || '会员')} · 生效中</b>
           <small>有效期至 ${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 · ${leftTxt}</small></div>
         </div>
-        <p class="muted tiny" style="text-align:center;margin:10px 0 0">续费：¥8/月 · ¥88/年 · ¥188/永久，找客服拿激活码</p>
+        <p class="muted tiny" style="text-align:center;margin:10px 0 0">续费方案见下方 · 兑换码由活动发放</p>
         <div class="vip-perk">
           <div><span>📝</span><b>每天免费抽 1 张小纸条</b></div>
           <div><span>📅</span><b>可自行设置打卡开始时间</b></div>
@@ -2053,11 +2155,13 @@
         <div class="sheet-actions col" style="margin-top:14px">
           <button class="btn btn-ghost btn-lg" id="vipStart">📅 设置打卡开始时间</button>
           <button class="btn btn-ghost btn-lg" id="vipMakeup">🖊️ 补签打卡</button>
-          <button class="btn btn-ghost btn-lg" id="vipAdd">再输一个码，续期</button>
+          <button class="btn btn-ghost btn-lg" id="vipAdd">输入兑换码续期</button>
+          <button class="btn btn-ghost btn-lg" id="vipRestore">恢复购买</button>
           <button class="btn btn-primary btn-lg" id="vipOk">知道啦</button>
         </div>`);
       $('#vipOk').onclick = closeSheet;
       $('#vipAdd').onclick = () => vipInputSheet(true);
+      $('#vipRestore').onclick = iapRestore;
       $('#vipStart').onclick = vipStartSheet;
       $('#vipMakeup').onclick = vipMakeupSheet;
       return;
@@ -2067,11 +2171,11 @@
 
   function vipInputSheet(hasCode) {
     sheet(`<h3>🎫 陪伴会员</h3>
-      <p class="sheet-sub">${hasCode ? '再输一个新码可续期叠加（每个码只能用一次）' : '每个激活码只能用一次，输入后立即生效'}</p>
-      <div class="vip-price">
-        <div><b>¥8</b><small>/ 月</small></div>
-        <div><b>¥88</b><small>/ 年</small></div>
-        <div><b>¥188</b><small>/ 永久</small></div>
+      <p class="sheet-sub">${hasCode ? '再输一个新兑换码可续期叠加（每个码只能用一次）' : '每个兑换码只能用一次，兑换后立即生效'}</p>
+      <div class="vip-price" id="vipBuy">
+        <button class="vip-buy" data-sku="vip_month"><b>¥8</b><small>/ 月</small></button>
+        <button class="vip-buy" data-sku="vip_year"><b>¥88</b><small>/ 年</small></button>
+        <button class="vip-buy" data-sku="vip_forever"><b>¥188</b><small>/ 永久</small></button>
       </div>
       <div class="vip-perk">
         <div><span>📝</span><b>每天免费抽 1 张小纸条</b></div>
@@ -2081,10 +2185,11 @@
       </div>
       <input class="vip-input" id="vipCode" placeholder="KP-XXXXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false">
       <div class="sheet-actions col" style="margin-top:12px">
-        <button class="btn btn-primary btn-lg" id="vipAct">激活会员</button>
+        <button class="btn btn-primary btn-lg" id="vipAct">兑换会员</button>
+        <button class="btn btn-ghost btn-lg" id="vipRestore2">恢复购买</button>
         <button class="btn btn-ghost btn-lg" id="vipCancel">${hasCode ? '先不续' : '先看看'}</button>
       </div>
-      <p class="muted tiny" style="text-align:center;margin-top:10px">还没有激活码？去菜单里点「联系客服」找我买</p>`);
+      <p class="muted tiny" style="text-align:center;margin-top:10px">兑换码由活动发放 · 也可以直接点上方方案购买</p>`);
 
     const act = async () => {
       const el = $('#vipCode');
@@ -2130,10 +2235,12 @@
     };
     $('#vipAct').onclick = act;
     $('#vipCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') act(); });
+    $$('#vipBuy .vip-buy').forEach((b) => { b.onclick = () => iapBuy(b.dataset.sku); });
+    $('#vipRestore2').onclick = iapRestore;
     $('#vipCancel').onclick = closeSheet;
   }
 
-  /* ---------------- 自绘日历（网页 / APK 样式统一） ---------------- */
+  /* ---------------- 自绘日历 ---------------- */
   const CAL_W = ['日', '一', '二', '三', '四', '五', '六'];
 
   /* 会员：自行设置打卡开始时间（日历单选） */
@@ -2967,24 +3074,6 @@
     };
   }
 
-  function serviceSheet() {
-    const wxid = 'z849998116';
-    sheet(`<h3>💬 联系客服</h3>
-      <p class="sheet-sub">遇到问题、想提建议，加微信随时找我</p>
-      <div class="wx-card">
-        <span class="wx-card-ico">💬</span>
-        <div><small>客服微信号</small><b>${wxid}</b></div>
-      </div>
-      <div class="sheet-actions col">
-        <button class="btn btn-primary btn-lg" id="svCopy">📋 复制微信号</button>
-        <button class="btn btn-ghost btn-lg" id="svOk">知道啦</button>
-      </div>`);
-    $('#svCopy').onclick = async () => {
-      const ok = await copyText(wxid);
-      toast(ok ? '微信号已复制，去微信搜索添加吧' : '复制失败，请手动记下 ' + wxid, ok ? '📋' : '⚠️');
-    };
-    $('#svOk').onclick = closeSheet;
-  }
 
   async function copyLink() {
     const ok = await copyText(gameUrl());
@@ -3100,24 +3189,24 @@
         <p class="sheet-sub">分享给朋友，或管理当前账号</p>
         <div class="menu-list">
           <button class="menu-row" id="mFriends"><span>👥</span><div><b>游戏好友</b><small>搜昵称加好友，看对方坚持了多久</small></div></button>
-          ${isAndroid ? `<button class="menu-row" id="mApk"><span>📥</span><div><b>下载安卓 App</b><small>安装包下载到手机，装好就是原生应用</small></div></button>` : ''}
           <button class="menu-row" id="mShare"><span>🔗</span><div><b>分享链接</b><small>复制网页链接或安装包链接</small></div></button>
-          <button class="menu-row" id="mVip"><span>🎫</span><div><b>会员中心</b><small>${vipOn() ? '已开通 · 还剩 ' + vipLeftDays() + ' 天' : '输入激活码开通'}</small></div></button>
+          <button class="menu-row" id="mVip"><span>🎫</span><div><b>会员中心</b><small>${vipOn() ? '已开通 · 还剩 ' + vipLeftDays() + ' 天' : '购买或兑换开通'}</small></div></button>
           <button class="menu-row" id="mAccount"><span>🔑</span><div><b>${S.acct ? '我的账号' : '账号密码登录'}</b><small>${S.acct ? esc(S.acct) + ' · 换手机可找回记录' : '登录后换手机也能找回打卡记录'}</small></div></button>
+          ${new URLSearchParams(location.search).has('sync') ? `<button class="menu-row" id="mSync"><span>☁️</span><div><b>云同步</b><small>同步状态诊断（调试入口）</small></div></button>` : ''}
           ${S.acct ? '' : `<button class="menu-row" id="mRecCode"><span>🛟</span><div><b>存档找回码</b><small>${S.recCode ? esc(S.recCode) : '重装 / 换手机后凭码找回这份记录'}</small></div></button>`}
-          <button class="menu-row" id="mService"><span>💬</span><div><b>联系客服</b><small>加微信，问题随时找我</small></div></button>
+          <button class="menu-row" id="mContact"><span>✉️</span><div><b>联系我们</b><small>Zhangpeizhe333@gmail.com</small></div></button>
           <button class="menu-row" id="mLang"><span>🌐</span><div><b>Language / 语言</b><small>English · 中文</small></div></button>
           <button class="menu-row danger" id="mLogout"><span>🚪</span><div><b>退出登录</b><small>记录会保留，可重新登录</small></div></button>
         </div>`);
-      const ma = $('#mApk');
-      if (ma) ma.onclick = downloadApk;
       $('#mShare').onclick = shareSheet;
       $('#mVip').onclick = vipSheet;
       $('#mAccount').onclick = () => { if (S.acct) accountSheet(); else openAcctLogin(); };
+      const ms = $('#mSync');
+      if (ms) ms.onclick = syncSheet;
       const mrc = $('#mRecCode');
       if (mrc) mrc.onclick = recCodeSheet;
       $('#mFriends').onclick = friendsSheet;
-      $('#mService').onclick = serviceSheet;
+      $('#mContact').onclick = contactSheet;
       const ml = $('#mLang');
       if (ml && window.KKI18N) ml.onclick = () => KKI18N.sheet(sheet, closeSheet);
       $('#mLogout').onclick = logout;
@@ -3144,7 +3233,13 @@
     setInterval(() => { if (S && tab === 'peki' && !$('.sheet-mask')) updatePekiBtns(); }, 1000);
 
     const cur = DB.current && DB.accounts[DB.current];
-    if (cur) { S = fixSave(cur); enterApp(); persist(); } else showLogin();
+    if (cur) {
+      S = fixSave(cur);
+      enterApp();
+      /* 启动时只落盘、不刷新时间戳：一旦在这里刷新，本机永远显得比云端「新」，
+         云端有更新也永远拉不下来（多设备全都不同步的根因就在这） */
+      localStorage.setItem(DB_KEY, JSON.stringify(DB));
+    } else showLogin();
   }
 
   document.addEventListener('DOMContentLoaded', boot);
