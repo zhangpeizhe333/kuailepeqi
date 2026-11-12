@@ -1223,3 +1223,49 @@ h3 small { font-weight: 400; }
 .tap-ava:active { transform: scale(.9); }
 /* 已是好友：不显示 ＋ 角标（头像仍可点开卡片管理） */
 .tap-ava.fr::after { display: none; }
+
+
+/* ===== iOS 版：内购价格按钮 / 说明 / 恢复购买 ===== */
+.vip-price > .vip-buy {
+  flex: 1; display: block; text-align: center; padding: 12px 4px; border-radius: 14px;
+  background: linear-gradient(160deg, rgba(255, 212, 121, .16), rgba(255, 179, 71, .08));
+  border: 1px solid rgba(255, 212, 121, .3); font-family: inherit; cursor: pointer;
+  transition: transform .12s, border-color .15s;
+}
+.vip-price > .vip-buy:active { transform: scale(.97); border-color: rgba(255, 212, 121, .6); }
+.vip-price > .vip-buy b { display: block; font-size: 20px; color: var(--gold); }
+.vip-price > .vip-buy small { color: var(--muted); font-size: 11px; }
+.iap-note { margin: 8px 0 0; font-size: 11.5px; color: var(--muted); text-align: center; line-height: 1.6; }
+/* 海外版联系卡片：邮箱较长，允许折行防截断 */
+.wx-card b { word-break: break-all; font-size: 15px; }
+
+/* ===== iOS 版：黄色按钮防压暗（加强版，全部 !important） =====
+   Safari 在整页被声明为深色时会把亮色按钮自动调成灰黄，禁用按钮还会被
+   系统默认变灰。下面把背景、文字、透明度、滤镜全部钉死，系统层无法覆盖。 */
+html { color-scheme: light !important; }
+.btn-primary, .act.primary,
+.btn-primary:disabled, .btn-primary[disabled],
+.act.primary:disabled, .act.primary[disabled] {
+  -webkit-appearance: none !important; appearance: none !important;
+  background-color: #ffd06a !important;
+  background-image: linear-gradient(135deg, #fff0c2, #ffc24f) !important;
+  color: #3d2808 !important; -webkit-text-fill-color: #3d2808 !important;
+  filter: none !important;
+  forced-color-adjust: none !important; color-scheme: light !important;
+}
+.btn-primary:not(:disabled):not([disabled]),
+.act.primary:not(:disabled):not([disabled]) { opacity: 1 !important; }
+.btn-primary:disabled, .btn-primary[disabled],
+.act.primary:disabled, .act.primary[disabled] { opacity: .92 !important; }
+@media (prefers-color-scheme: dark) {
+  html { color-scheme: light !important; }
+  .btn-primary, .act.primary,
+  .btn-primary:disabled, .act.primary:disabled {
+    background-color: #ffd06a !important;
+    background-image: linear-gradient(135deg, #fff0c2, #ffc24f) !important;
+    -webkit-text-fill-color: #3d2808 !important;
+    filter: none !important;
+  }
+  .btn-primary:not(:disabled), .act.primary:not(:disabled) { opacity: 1 !important; }
+  .btn-primary:disabled, .act.primary:disabled { opacity: .92 !important; }
+}
