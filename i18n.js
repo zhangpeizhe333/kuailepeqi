@@ -411,6 +411,7 @@
     '📊 戒烟数据': '📊 Quit-Smoking Stats', '📊 戒酒数据': '📊 Sober Stats', '📊 运动数据': '📊 Workout Stats',
     '开始戒烟': 'Smoke-free start', '开始戒酒': 'Sober start', '未打卡': 'Not checked in',
     '先看看': 'Just looking',
+    '先不续': 'Not now',
     '/ 月': '/ mo', '/ 年': '/ yr', '/ 永久': ' one-time',
 
     /* 称号（戒烟） */
