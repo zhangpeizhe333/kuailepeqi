@@ -446,6 +446,20 @@ h3 small { font-weight: 400; }
 .menu-row small { display: block; font-size: 11.5px; color: var(--muted); font-weight: 400; margin-top: 1px; }
 .menu-row.danger { background: rgba(227, 93, 106, .13); border-color: rgba(227, 93, 106, .3); }
 .menu-row.danger b { color: #ff9aa5; }
+
+/* ===== 云同步诊断面板 ===== */
+.sync-box {
+  background: rgba(255, 255, 255, .04); border: 1px solid var(--line);
+  border-radius: 14px; padding: 4px 12px; margin-top: 4px;
+}
+.sync-row {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid rgba(255, 255, 255, .06);
+  font-size: 12.5px; line-height: 1.5;
+}
+.sync-row:last-child { border-bottom: 0; }
+.sync-row > span { color: var(--muted); flex: none; }
+.sync-row > b { font-weight: 600; text-align: right; word-break: break-all; }
 .share-tip {
   display: flex; align-items: center; justify-content: center; gap: 10px;
   background: rgba(255, 212, 121, .1); border: 1px dashed rgba(255, 212, 121, .4);
@@ -1030,6 +1044,13 @@ h3 small { font-weight: 400; }
 }
 .gd-text { font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
 .gd-imgs { display: flex; gap: 6px; margin-top: 6px; }
+/* 私信气泡里的图片 */
+.dm-img {
+  display: block; width: 150px; height: 150px; object-fit: cover; border-radius: 10px;
+  cursor: zoom-in; background: rgba(255,255,255,.06);
+}
+.dm-img.big { width: 100%; height: auto; max-height: none; cursor: zoom-out; }
+.chat-bub .dm-img + b { display: block; margin-top: 6px; }
 .gd-img {
   display: block; width: 118px; height: 118px; object-fit: cover; border-radius: 10px;
   border: 1px solid var(--line); cursor: zoom-in; background: rgba(255,255,255,.06);

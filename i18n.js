@@ -12,14 +12,6 @@
     '快乐佩奇': 'Quit Smoke & Drink',
     '戒烟戒酒跟我走': 'Quit Smoke & Drink With Me',
     '游戏制作：张佩喆': 'Made by Zhang Peizhe',
-    '© 2026 快乐佩奇': '© 2026 Happy Perry',
-    '联系我们': 'Contact us',
-    '✉️ 联系我们': '✉️ Contact us',
-    '有建议、想合作、遇到问题，都可以发邮件给我': 'Feedback, ideas or partnerships — just email me',
-    '邮箱': 'Email',
-    '📋 复制邮箱': '📋 Copy email',
-    '邮箱已复制': 'Email copied',
-    '复制失败，请手动输入': 'Copy failed, please type it manually',
     '断崖式戒烟 · 清醒戒酒 · 运动打卡': 'Cold-turkey quit · Sober living · Daily workouts',
     '让小朋友陪你一起变健康': 'A little buddy gets healthy with you',
     '首页': 'Home', '戒烟': 'Smoke-free', '戒酒': 'Sober', '运动': 'Workout',
@@ -353,6 +345,7 @@
 
     /* 会员 */
     '🎫 陪伴会员': '🎫 Buddy VIP',
+    '会员': 'VIP',
     '尊贵会员': 'VIP Member', '长期有效': 'Never expires',
     '找回恢复': 'Recovered',
     '每个激活码只能用一次，输入后立即生效': 'Each code works once, effective immediately',
@@ -539,6 +532,7 @@
     '图片已选好，点发布': 'Photo ready — tap Post',
     '图片太大，换一张小点的': 'Photo too large — pick a smaller one',
     '没取到图片，再试一次': "Couldn't get the photo — try again",
+    '图片已选好，点发送': 'Image ready — tap Send',
     '已从云端同步最新记录': 'Synced your latest data from the cloud',
     '只能发图片哦': 'Images only',
     '发得太快啦，休息一下再发': 'Too fast — take a short break first',
@@ -704,17 +698,17 @@
      PRICE_ANY = true 时（iOS），中文界面也用 PRICE 表显示美元价，
      但只影响充值弹窗那几个纯价格节点（¥8/¥88/¥188），
      打卡省钱等页面的 ¥ 保持不动 */
-  var CUR = '$';
-  var PRICE = { '¥8': '$1.99', '¥88': '$19.99', '¥188': '$39.99' };
-  var PRICE_ANY = true;
+  var CUR = '';
+  var PRICE = {};
+  var PRICE_ANY = false;
 
   function detect() {
     try {
       var s = localStorage.getItem('kk_lang');
       if (s === 'en' || s === 'zh') return s;
     } catch (e) {}
-    /* iOS 版默认英文 */
-    return 'en';
+    /* 网页 / 安卓默认中文；iOS 构建时会把下面一行替换为 return 'en'; */
+    return 'zh';
   }
   var LANG = detect();
 
