@@ -91,22 +91,6 @@ final class ShellViewController: UIViewController, WKNavigationDelegate {
 }
 
 extension ShellViewController: WKUIDelegate {
-    /* 网页 <input type="file">（拍照 / 相册）：自建「拍照 / 从相册选择」，观感与安卓版一致 */
-    func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters,
-                 initiatedByFrame frame: WKFrameInfo,
-                 completionHandler: @escaping ([URL]?) -> Void) {
-        PhotoPicker.present(from: self) { url in
-            completionHandler(url != nil ? [url!] : nil)
-        }
-    }
-
-    /* getUserMedia（相机/麦克风）直接放行；权限弹窗由系统按 Info.plist 描述展示 */
-    func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin,
-                 initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType,
-                 decisionHandler: @escaping (WKPermissionDecision) -> Void) {
-        decisionHandler(.grant)
-    }
-
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
                  initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
         let a = UIAlertController(title: nil, message: message, preferredStyle: .alert)
@@ -130,75 +114,6 @@ extension ShellViewController: WKUIDelegate {
         a.addAction(UIAlertAction(title: "好", style: .default) { _ in completionHandler(a.textFields?.first?.text) })
         a.addAction(UIAlertAction(title: "取消", style: .cancel) { _ in completionHandler(nil) })
         present(a, animated: true)
-    }
-}
-
-/* ---------------- 拍照 / 相册选择 ---------------- */
-enum PhotoPicker {
-    static func present(from vc: UIViewController, completion: @escaping (URL?) -> Void) {
-        let alert = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
-        if UIImagePickerController.isSourceTypeAvailable(.camera) {
-            alert.addAction(UIAlertAction(title: "📷 拍照", style: .default) { _ in
-                let picker = UIImagePickerController()
-                picker.sourceType = .camera
-                presentWith(vc, picker, completion)
-            })
-        }
-        alert.addAction(UIAlertAction(title: "🖼 从相册选择", style: .default) { _ in
-            var cfg = PHPickerConfiguration()
-            cfg.filter = .images
-            cfg.selectionLimit = 1
-            let libPicker = PHPickerViewController(configuration: cfg)
-            presentWith(vc, libPicker, completion)
-        })
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel) { _ in completion(nil) })
-        vc.present(alert, animated: true)
-    }
-
-    private static func presentWith(_ vc: UIViewController, _ picker: UIViewController,
-                                    _ completion: @escaping (URL?) -> Void) {
-        let coordinator = PhotoPickerCoordinator(completion: completion)
-        PhotoPickerCoordinator.active = coordinator // 保住引用，防止被释放
-        picker.delegate = coordinator
-        vc.present(picker, animated: true)
-    }
-}
-
-final class PhotoPickerCoordinator: NSObject, UIImagePickerControllerDelegate,
-                                    UINavigationControllerDelegate, PHPickerViewControllerDelegate {
-    static var active: PhotoPickerCoordinator?
-    let completion: (URL?) -> Void
-
-    init(completion: @escaping (URL?) -> Void) { self.completion = completion }
-
-    func imagePickerController(_ picker: UIImagePickerController,
-                               didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-        finish(info[.originalImage] as? UIImage)
-    }
-
-    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { finish(nil) }
-
-    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-        guard let item = results.first?.itemProvider, item.canLoadObject(ofClass: UIImage.self) else {
-            finish(nil); return
-        }
-        item.loadObject(ofClass: UIImage.self) { [self] obj, _ in
-            DispatchQueue.main.async { finish(obj as? UIImage) }
-        }
-    }
-
-    private func finish(_ image: UIImage?) {
-        let done = completion
-        PhotoPickerCoordinator.active = nil
-        guard let img = image else { done(nil); return }
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kk_\(Int(Date().timeIntervalSince1970 * 1000)).jpg")
-        if let data = img.jpegData(compressionQuality: 0.92) {
-            try? data.write(to: url)
-            done(url)
-        } else {
-            done(nil)
-        }
     }
 }
 
