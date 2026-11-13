@@ -39,6 +39,7 @@ jobs:
           # 兼容三种 Secret 写法：.p8 原文、单行 base64、带换行/丢填充的 base64
           RAW="$(printf '%s' "$P8_B64" | tr -d '[:space:]')"
           echo "secret chars: ${#P8_B64}, after stripping whitespace: ${#RAW}"
+          echo "head: $(printf '%s' "$RAW" | cut -c1-12)"
           if printf '%s' "$P8_B64" | grep -q "BEGIN PRIVATE KEY"; then
             printf '%s\n' "$P8_B64" > "$KEY_PATH"
             echo "key source: raw pem"
