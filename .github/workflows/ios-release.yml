@@ -36,23 +36,30 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/keys"
           KEY_PATH="$RUNNER_TEMP/keys/AuthKey_${KEY_ID}.p8"
-          # 兼容三种 Secret 写法：.p8 原文、单行 base64、带换行/空格的 base64
+          # 兼容三种 Secret 写法：.p8 原文、单行 base64、带换行/丢填充的 base64
           RAW="$(printf '%s' "$P8_B64" | tr -d '[:space:]')"
           echo "secret chars: ${#P8_B64}, after stripping whitespace: ${#RAW}"
           if printf '%s' "$P8_B64" | grep -q "BEGIN PRIVATE KEY"; then
             printf '%s\n' "$P8_B64" > "$KEY_PATH"
+            echo "key source: raw pem"
           else
-            if [ $(( ${#RAW} % 4 )) -ne 0 ]; then
-              echo "::error::ASC_KEY_CONTENT 长度不是 4 的倍数（${#RAW}），说明不是合法 base64，请重新生成。"
-              exit 1
+            CLEAN="$(printf '%s' "$RAW" | tr -cd 'A-Za-z0-9+/=')"
+            REM=$(( ${#CLEAN} % 4 ))
+            if [ "$REM" -ne 0 ]; then
+              PAD=$(( 4 - REM ))
+              CLEAN="${CLEAN}$(printf '=%.0s' $(seq 1 $PAD))"
+              echo "padding added: ${PAD}"
             fi
-            printf '%s' "$RAW" | base64 -D > "$KEY_PATH" || {
-              echo "::error::ASC_KEY_CONTENT base64 解码失败，请重新生成后覆盖保存。"
-              exit 1
-            }
+            echo "base64 length: ${#CLEAN}"
+            printf '%s' "$CLEAN" | base64 -D > "$KEY_PATH" || true
+            echo "key source: base64"
           fi
           if ! head -1 "$KEY_PATH" | grep -q "BEGIN PRIVATE KEY"; then
-            echo "::error::ASC_KEY_CONTENT 内容不对：既不是 .p8 文件原文，也不是 base64。请检查这个 Secret 后重跑。"
+            echo "::error::密钥解析失败。请把 Secret 改成 .p8 文件原文（记事本打开、全选复制），以 -----BEGIN PRIVATE KEY----- 开头，保存后重跑。"
+            exit 1
+          fi
+          if ! openssl pkey -in "$KEY_PATH" -noout 2>/dev/null; then
+            echo "::error::密钥内容不完整（能识别 PEM 头但解不出私钥），请重新复制 .p8 原文覆盖 Secret。"
             exit 1
           fi
           echo "key ok: $(head -1 "$KEY_PATH")"
