@@ -2,14 +2,20 @@ default_platform(:ios)
 
 # 用法（在 ios-build 目录下）：fastlane ios to_testflight
 # 需要的环境变量全部由 GitHub Actions 的 Secrets 注入：
-#   ASC_KEY_ID / ASC_ISSUER_ID / ASC_KEY_CONTENT(p8 私钥的 base64) / IPA_PATH
+#   ASC_KEY_ID / ASC_ISSUER_ID / P8_PATH(.p8 密钥文件路径) / IPA_PATH
 platform :ios do
   lane :to_testflight do
+    # 兼容两种调用方式：CI 提供 P8_PATH（密钥文件）时优先用文件；
+    # 否则回退到 ASC_KEY_CONTENT（base64）。
+    key_opts = if ENV["P8_PATH"] && !ENV["P8_PATH"].to_s.empty?
+                 { key_filepath: ENV["P8_PATH"] }
+               else
+                 { key_content: ENV["ASC_KEY_CONTENT"], is_key_content_base64: true }
+               end
     api_key = app_store_connect_api_key(
       key_id: ENV["ASC_KEY_ID"],
       issuer_id: ENV["ASC_ISSUER_ID"],
-      key_content: ENV["ASC_KEY_CONTENT"],
-      is_key_content_base64: true,
+      **key_opts,
       in_house: false
     )
 
