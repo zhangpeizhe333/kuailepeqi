@@ -93,7 +93,7 @@
     /* 云端更新：正在弹层里输入时不打断，下次切回前台再同步 */
     if (!silent && document.querySelector('.sheet-mask')) return;
     /* 整份覆盖，但保留本机的账号与云端凭据 */
-    const keep = { acct: S.acct, cloud: S.cloud, recCode: S.recCode };
+    const keep = { acct: S.acct, cloud: S.cloud, recCode: S.recCode, g: S.g };
     /* 旧版设备上传的签名还是「三页共用一个字符串」的旧格式：
        这种存档不覆盖本机已分开的三页签名，否则会把独立签名打回共用 */
     if (typeof r.save.signature !== 'object' && S.signature && typeof S.signature === 'object') {
