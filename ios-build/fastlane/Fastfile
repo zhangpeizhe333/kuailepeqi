@@ -13,20 +13,11 @@ platform :ios do
       key_filepath: ENV["P8_PATH"],
       in_house: false
     )
-    Spaceship::ConnectAPI.token = api_key
-    devices = Spaceship::ConnectAPI::Device.all
-    if devices.empty?
-      udid = "00008101-00C1DEADBEEFCAFE"
-      UI.message("账号里没有设备，注册占位设备 #{udid} ...")
-      Spaceship::ConnectAPI.post_device(
-        name: "CI Build Placeholder",
-        platform: Spaceship::ConnectAPI::Platform::IOS,
-        udid: udid
-      )
-      UI.success("占位设备注册完成")
-    else
-      UI.message("账号已有 #{devices.size} 台设备，无需注册")
-    end
+    register_devices(
+      api_key: api_key,
+      devices: { "CI Build Placeholder" => "00008101-00C1DEADBEEFCAFE" },
+      platform: "ios"
+    )
   end
 
   lane :to_testflight do
