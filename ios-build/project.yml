@@ -29,8 +29,6 @@ targets:
   KuailePeqi:
     type: application
     platform: iOS
-    info:
-      path: Info.plist
     sources:
       - path: ../ios/native/AppShell.swift
       - path: ../ios/native/PrivacyInfo.xcprivacy
@@ -39,6 +37,7 @@ targets:
         buildPhase: resources
     settings:
       base:
+        INFOPLIST_FILE: Info.plist          # 直接引用手写的 Info.plist（不要用 info:，那会覆盖它）
         PRODUCT_BUNDLE_IDENTIFIER: com.zhangpeizhe.kuailepeqi
         DEVELOPMENT_TEAM: TEAM_ID_PLACEHOLDER
         CODE_SIGN_STYLE: Automatic
