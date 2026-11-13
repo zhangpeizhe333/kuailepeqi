@@ -7,8 +7,8 @@
   --line: rgba(255, 255, 255, .1);
   --text: #f6f2ff;
   --muted: #a79fc4;
-  --gold: #ffd479;
-  --gold2: #ffb347;
+  --gold: #ffd35c;
+  --gold2: #ffab24;
   --mint: #7ee6c1;
   --pink: #ff9ec4;
   --violet: #b79bff;
@@ -16,7 +16,7 @@
   --shadow: 0 18px 50px rgba(0, 0, 0, .45);
   /* 整页配色由我们自己定义，声明 light 可阻止 iOS Safari 对「亮色元素」做自动暗化，
      否则它会把亮黄按钮调成灰黄。深色观感由 body 背景保证，不依赖系统主题。 */
-  color-scheme: light;
+  color-scheme: only light;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body {
@@ -124,7 +124,10 @@ h3 small { font-weight: 400; }
 .acct-btn {
   width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
   margin-top: 10px; border-radius: 15px; padding: 14px; font-size: 15px; font-weight: 700;
-  color: var(--gold); background: rgba(255, 212, 121, .1); border: 1px solid rgba(255, 212, 121, .32);
+  color: #3d2808; -webkit-text-fill-color: #3d2808;
+  background-color: #ffd06a; background-image: linear-gradient(135deg, #ffe9a8, #ffc14a);
+  border: none; box-shadow: 0 8px 22px rgba(255, 179, 71, .32);
+  forced-color-adjust: none; color-scheme: light;
 }
 .acct-btn:active { transform: scale(.97); }
 
@@ -1167,8 +1170,10 @@ h3 small { font-weight: 400; }
 }
 .wx-recover {
   display: flex; align-items: center; justify-content: center; width: 100%;
-  margin-top: 10px; padding: 11px; border-radius: 12px; font-size: 13.5px; font-weight: 600;
-  color: #d8b45e; background: rgba(255, 212, 121, .08); border: 1px dashed rgba(255, 212, 121, .4);
+  margin-top: 10px; padding: 11px; border-radius: 12px; font-size: 13.5px; font-weight: 700;
+  color: #4a3006; -webkit-text-fill-color: #4a3006;
+  background-color: #ffdd8f; background-image: linear-gradient(135deg, #fff1c6, #ffcf62);
+  border: none; forced-color-adjust: none; color-scheme: light;
 }
 
 /* 修改昵称 · 聊天头像（会员可自选） */
