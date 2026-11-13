@@ -68,11 +68,17 @@ jobs:
           cp ios/AppIcon-1024.png ios-build/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
           cd ios-build && xcodegen generate
 
+      - name: Ensure device registered (dev signing needs >=1 device)
+        working-directory: ios-build
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          P8_PATH: ${{ runner.temp }}/keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8
+        run: fastlane ios ensure_device
+
       - name: Archive
         run: |
           set -euo pipefail
-          # 归档阶段不签名：开发证书需要账号里注册过设备，而云端机器没有。
-          # 签名统一放到 Export IPA 那一步（分发证书不需要设备）。
           xcodebuild \
             -project ios-build/KuailePeqi.xcodeproj \
             -scheme KuailePeqi \
@@ -80,9 +86,10 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/KuailePeqi.xcarchive" \
             CURRENT_PROJECT_VERSION="${BUILD_NO}" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${KEY_ID}.p8" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID" \
             clean archive
 
       - name: Export IPA
