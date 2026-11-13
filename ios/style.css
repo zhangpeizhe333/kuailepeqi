@@ -1266,6 +1266,24 @@ h3 small { font-weight: 400; }
 .tap-ava.fr::after { display: none; }
 
 
+/* ===== Google 一键登录按钮（白色按钮 + 官方四色 G）===== */
+.btn-google {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: #fff !important; background-image: none !important;
+  color: #1f1f1f !important; -webkit-text-fill-color: #1f1f1f !important;
+  border: 1px solid #dadce0 !important; font-weight: 600;
+  forced-color-adjust: none;
+}
+.btn-google:active { background: #f1f3f4 !important; }
+.btn-google svg { flex: none; }
+.or-line {
+  display: flex; align-items: center; gap: 10px;
+  margin: 12px 0 10px; color: var(--muted); font-size: 12px;
+}
+.or-line::before, .or-line::after {
+  content: ''; flex: 1; height: 1px; background: rgba(255,255,255,.14);
+}
+
 /* ===== iOS 版：内购价格按钮 / 说明 / 恢复购买 ===== */
 .vip-price > .vip-buy {
   flex: 1; display: block; text-align: center; padding: 12px 4px; border-radius: 14px;

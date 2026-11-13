@@ -24,6 +24,21 @@
 	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>拍照上传到花园动态或私聊时需要使用相机</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>从相册选择照片上传时需要访问相册</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.zhangpeizhe.kuailepeqi</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>kuailepeqi</string>
+			</array>
+		</dict>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiredDeviceCapabilities</key>

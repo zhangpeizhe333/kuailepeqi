@@ -399,6 +399,13 @@
     '🖊️ 补签打卡': '🖊️ Make-up check-ins',
     '请在 App Store 版本中购买': 'Purchase inside the App Store version',
     '请在 App Store 版本中恢复购买': 'Restore purchases inside the App Store version',
+    '用 Google 账号继续': 'Continue with Google',
+    'Google 登录失败，可以改用账号密码登录': 'Google sign-in failed — try account login instead',
+    'Google 登录打不开，稍后再试': 'Could not open Google — try again later',
+    '登录没成功，稍后再试': 'Sign-in failed, please try again',
+    '欢迎回来': 'Welcome back',
+    '或': 'or',
+    '请在 App Store 版本中恢复购买': 'Restore purchases inside the App Store version',
     '请在 Google Play 版本中购买': 'Purchase inside the Google Play version',
     '请在 Google Play 版本中恢复购买': 'Restore purchases inside the Google Play version',
     '购买没成功，稍后再试': "Purchase didn't go through — try again later",
@@ -869,11 +876,11 @@
     if (credit) credit.style.display = 'none';
   }
   /* 登录页语言快捷切换（国旗按钮）：
-     英文界面 → China / English；中文界面 → 中文 / English（不混排） */
+     英文界面 → Chinese / English；中文界面 → 中文 / English（不混排） */
   function bindLangPick() {
     var zh = document.getElementById('langZh'), en = document.getElementById('langEn');
     if (!zh || !en) return;
-    zh.textContent = LANG === 'en' ? 'China' : '中文';
+    zh.textContent = LANG === 'en' ? 'Chinese' : '中文';
     en.textContent = 'English';
     zh.classList.toggle('on', LANG === 'zh');
     en.classList.toggle('on', LANG === 'en');
@@ -887,7 +894,7 @@
     var cur = isEn ? 'English' : '中文';
     var title = isEn ? '🌐 Language' : '🌐 语言';
     var sub = (isEn ? 'Current: ' : '当前：') + cur;
-    var zhLabel = isEn ? 'China' : '中文';
+    var zhLabel = isEn ? 'Chinese' : '中文';
     sheetFn('<h3>' + title + '</h3><p class="sheet-sub">' + sub + '</p>' +
       '<div class="sheet-actions col">' +
       '<button class="btn btn-primary btn-lg' + (isEn ? ' lang-on' : '') + '" id="lgEn">English</button>' +

@@ -861,11 +861,11 @@
     if (credit) credit.style.display = 'none';
   }
   /* 登录页语言快捷切换（国旗按钮）：
-     英文界面 → China / English；中文界面 → 中文 / English（不混排） */
+     英文界面 → Chinese / English；中文界面 → 中文 / English（不混排） */
   function bindLangPick() {
     var zh = document.getElementById('langZh'), en = document.getElementById('langEn');
     if (!zh || !en) return;
-    zh.textContent = LANG === 'en' ? 'China' : '中文';
+    zh.textContent = LANG === 'en' ? 'Chinese' : '中文';
     en.textContent = 'English';
     zh.classList.toggle('on', LANG === 'zh');
     en.classList.toggle('on', LANG === 'en');
@@ -879,7 +879,7 @@
     var cur = isEn ? 'English' : '中文';
     var title = isEn ? '🌐 Language' : '🌐 语言';
     var sub = (isEn ? 'Current: ' : '当前：') + cur;
-    var zhLabel = isEn ? 'China' : '中文';
+    var zhLabel = isEn ? 'Chinese' : '中文';
     sheetFn('<h3>' + title + '</h3><p class="sheet-sub">' + sub + '</p>' +
       '<div class="sheet-actions col">' +
       '<button class="btn btn-primary btn-lg' + (isEn ? ' lang-on' : '') + '" id="lgEn">English</button>' +

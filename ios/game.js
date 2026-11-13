@@ -545,6 +545,68 @@
     savePullAndApply(true);
     setTimeout(() => { toast(`欢迎回来，${S.nickname}！`, '🎉'); enterApp(); }, 150);
   }
+  /* ---------------- Google 一键登录 ---------------- */
+  function initGoogleBtn() {
+    const wrap = $('#googleWrap');
+    if (!wrap) return;
+    const native = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.google);
+    if (!native) { wrap.remove(); return; }
+    wrap.innerHTML = '<button class="btn btn-google btn-lg" id="acctGoogle">' +
+      '<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' +
+      '<span>用 Google 账号继续</span></button>' +
+      '<div class="or-line"><span>或</span></div>';
+    $('#acctGoogle').onclick = googleSignIn;
+  }
+  let googleBusy = false;
+  function googleSignIn() {
+    if (googleBusy) return;
+    googleBusy = true;
+    try { window.webkit.messageHandlers.google.postMessage({ action: 'signIn' }); }
+    catch (e) { googleBusy = false; toast('Google 登录打不开，稍后再试', '⚠️'); }
+  }
+  /* 原生层回调：{ok:true, session:{access_token, refresh_token}} / {ok:false, err} */
+  window.__googleResult = async function (r) {
+    googleBusy = false;
+    if (!r || !r.ok) {
+      if (r && r.err === 'cancel') toast('已取消', 'ℹ️');
+      else toast('Google 登录失败，可以改用账号密码登录', '⚠️');
+      return;
+    }
+    try {
+      const at = r.session.access_token;
+      const u = await fetch(SB_URL + '/auth/v1/user', {
+        headers: { apikey: SB_KEY, Authorization: 'Bearer ' + at },
+      }).then((x) => x.json());
+      const email = (u && u.email) || 'Google';
+      const md = (u && u.user_metadata) || {};
+      const nick = String(md.full_name || md.name || '').slice(0, 12);
+      const res = await sbRpc('pk_login_google', { p_nick: nick || 'Player' }, at);
+      if (res && res.ok) applyGoogleLogin(res, email);
+      else toast('登录没成功，稍后再试', '⚠️');
+    } catch (e) { toast('连不上云端，检查一下网络', '📡'); }
+  };
+  function applyGoogleLogin(r, email) {
+    const key = 'acct_g_' + r.uid;
+    let acc = DB.accounts[key];
+    if (!acc) {
+      acc = fixSave(freshSave());
+      acc.wx = { wxid: key, nick: r.nickname || 'Player' };
+      acc.nickname = r.nickname || 'Player';
+      acc.avatar = r.avatar || '🐷';
+      restoreDays(acc, r);
+    }
+    acc.acct = email || 'Google';
+    acc.g = true;
+    acc.cloud = { uid: r.uid, token: r.token };
+    DB.accounts[key] = acc;
+    DB.current = key;
+    S = acc;
+    localStorage.setItem(DB_KEY, JSON.stringify(DB));
+    closeSheet();
+    savePullAndApply(true);
+    setTimeout(() => { toast('欢迎回来，' + S.nickname + '！', '🎉'); enterApp(); }, 150);
+  }
+
   function acctErrMsg(err, mode) {
     const map = {
       user_taken: '这个账号已经被注册了，换一个吧',
@@ -558,6 +620,7 @@
   function openAcctLogin(prefill) {
     sheet(`<h3>🔑 账号登录</h3>
       <p class="sheet-sub">登录后换手机、换浏览器也能找回打卡记录</p>
+      <div id="googleWrap"></div>
       <div class="seg" id="acctMode">
         <button class="seg-b active" data-m="login">登录</button>
         <button class="seg-b" data-m="reg">注册新账号</button>
@@ -598,6 +661,7 @@
       } catch (e) { go.disabled = false; toast('连不上云端，检查一下网络', '📡'); }
     };
     go.onclick = submit;
+    initGoogleBtn();
     $('#acctPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
   }
   function acctChangePass() {
@@ -1974,7 +2038,7 @@
           try {
             const r = await sbRpc('pk_garden_like', { p_uid: c.uid, p_token: c.token, p_kind: 'post', p_id: parseInt(bt.dataset.like, 10) });
             if (r && r.ok) load(); else toast('没点上，再试一次', '⚠️');
-          } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+          } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
         };
       });
       /* 评论输入展开/收起 */
@@ -2001,7 +2065,7 @@
             if (r && r.ok) { toast('评论已发出', '💬'); cmtAll.add(parseInt(bt.dataset.csend, 10)); load(); }
             else if (r && r.err === 'too_fast') toast('发得太快啦，休息一下再发', '⏳');
             else toast('没发出去，再试一次', '⚠️');
-          } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+          } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
         };
       });
       /* 查看更多评论 */
@@ -2028,7 +2092,7 @@
             const r = await sbRpc('pk_garden_delete', { p_uid: c.uid, p_token: c.token, p_id: parseInt(bt.dataset.id, 10) });
             if (r && r.ok) { toast('已从花园删除', '🌷'); load(); }
             else toast('没删掉，再试一次', '⚠️');
-          } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+          } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
         };
       });
       /* 删自己的评论 */
@@ -2039,7 +2103,7 @@
             const r = await sbRpc('pk_garden_cmt_delete', { p_uid: c.uid, p_token: c.token, p_id: parseInt(bt.dataset.cdel, 10) });
             if (r && r.ok) { toast('评论已删除', '💬'); load(); }
             else toast('没删掉，再试一次', '⚠️');
-          } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+          } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
         };
       });
     };
@@ -2109,7 +2173,7 @@
         } else if (r && r.err === 'img_too_big') { toast('图片太大，换一张小点的', '⚠️'); }
         else if (r && r.err === 'too_fast') { toast('发得太快啦，休息一下再发', '⏳'); }
         else { toast('没发出去，再试一次', '⚠️'); }
-      } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+      } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
       btn.disabled = false;
     };
     $('#gardenSend').onclick = post;
@@ -2205,14 +2269,28 @@
     if (!window.KKIAP || !window.KKIAP.available()) return toast('请在 App Store 版本中恢复购买', 'ℹ️');
     window.KKIAP.restore();
   }
-  /* 原生层回调：{type:'bought'|'restored'|'cancel'|'empty'|'error', sku, tx} */
+  /* 原生层回调：{type:'bought'|'restored'|'cancel'|'empty'|'error', sku, tx, msg} */
   window.__iapResult = function (r) {
     if (!r) return;
     if (r.type === 'bought' || r.type === 'restored') iapApply(r.sku, r.tx);
     else if (r.type === 'cancel') toast('已取消购买', 'ℹ️');
     else if (r.type === 'empty') toast('没有可恢复的购买记录', 'ℹ️');
-    else if (r.type === 'error') toast('购买没成功，稍后再试', '⚠️');
+    else if (r.type === 'error') toast(r.msg || '购买没成功，稍后再试', '⚠️');
   };
+  /* App Store 本地化价格回填（每个地区的 App Store 自动显示当地货币） */
+  window.__iapPrices = function (map) {
+    if (!map) return;
+    $$('#vipBuy .vip-buy').forEach((b) => {
+      const p = map[b.dataset.sku];
+      if (!p) return;
+      const en = uiIsEn();
+      const unit = b.dataset.sku === 'vip_forever'
+        ? (en ? 'forever' : '永久')
+        : '/' + (b.dataset.sku === 'vip_month' ? (en ? 'mo' : '月') : (en ? 'yr' : '年'));
+      b.innerHTML = '<b>' + esc(p) + '</b><small>' + unit + '</small>';
+    });
+  };
+  if (window.KKIAP && window.KKIAP.available() && window.KKIAP.prices) window.KKIAP.prices();
 
   /* ---------------- 会员 · 激活码 ---------------- */
   const VIP_ALPHA = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -2563,7 +2641,12 @@
         body: JSON.stringify(args || {}),
         signal: ctl.signal,
       });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (!res.ok) {
+        /* 云端函数抛出的中文提示（禁言等）透传给界面，别当成普通网络错误 */
+        let m = '';
+        try { m = (JSON.parse(await res.text()) || {}).message || ''; } catch (e) {}
+        throw new Error(m || ('HTTP ' + res.status));
+      }
       const txt = await res.text();
       return txt ? JSON.parse(txt) : null;
     } finally { clearTimeout(timer); }
@@ -2848,7 +2931,7 @@
         if (r && r.ok) { toast('专属红心已送出', '❤️'); load(); }
         else if (r && r.err === 'blocked') toast('你已被对方拉黑，送不出去', '🚫');
         else toast('没送出去，再试一次', '⚠️');
-      } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+      } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
       setTimeout(() => { fb.disabled = false; }, 1500);
     };
   }
@@ -2953,7 +3036,7 @@
           try {
             await sbRpc('pk_del_friend', { p_uid: c.uid, p_token: c.token, p_friend: b.dataset.del });
             toast('已移除', '👋'); load();
-          } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+          } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
         };
       });
     };
@@ -2984,7 +3067,7 @@
               if (r && r.ok) { toast('加好啦', '🤝'); b.textContent = '已添加'; b.disabled = true; load(); }
               else if (r && r.err === 'self') toast('这是你自己呀', '🙃');
               else toast('没加上，再试一次', '⚠️');
-            } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+            } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
           };
         });
       } catch (err) {
@@ -3176,7 +3259,7 @@
         clearInterval(commTimer); commTimer = null;
         ov.remove();
         toast(`已退出${mt.name}，下次随时再进`, '👋');
-      } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+      } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
     };
 
     $('#cpMembers').onclick = async () => {
@@ -3217,7 +3300,7 @@
               if (r && r.ok) { toast('加好啦', '🤝'); b.textContent = '已添加'; b.disabled = true; }
               else if (r && r.err === 'self') toast('这是你自己呀', '🙃');
               else toast('没加上，再试一次', '⚠️');
-            } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+            } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
           };
         });
         mpanel.querySelectorAll('[data-cm-blk]').forEach((b) => {
@@ -3270,7 +3353,7 @@
           else toast('没送出去，再试一次', '⚠️');
         }
         else toast('没送出去，再试一次', '⚠️');
-      } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+      } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
       setTimeout(() => { cf.disabled = false; }, 1500);
     };
   }

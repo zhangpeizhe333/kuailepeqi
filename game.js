@@ -1974,7 +1974,7 @@
           try {
             const r = await sbRpc('pk_garden_like', { p_uid: c.uid, p_token: c.token, p_kind: 'post', p_id: parseInt(bt.dataset.like, 10) });
             if (r && r.ok) load(); else toast('没点上，再试一次', '⚠️');
-          } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+          } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
         };
       });
       /* 评论输入展开/收起 */
@@ -2001,7 +2001,7 @@
             if (r && r.ok) { toast('评论已发出', '💬'); cmtAll.add(parseInt(bt.dataset.csend, 10)); load(); }
             else if (r && r.err === 'too_fast') toast('发得太快啦，休息一下再发', '⏳');
             else toast('没发出去，再试一次', '⚠️');
-          } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+          } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
         };
       });
       /* 查看更多评论 */
@@ -2028,7 +2028,7 @@
             const r = await sbRpc('pk_garden_delete', { p_uid: c.uid, p_token: c.token, p_id: parseInt(bt.dataset.id, 10) });
             if (r && r.ok) { toast('已从花园删除', '🌷'); load(); }
             else toast('没删掉，再试一次', '⚠️');
-          } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+          } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
         };
       });
       /* 删自己的评论 */
@@ -2039,7 +2039,7 @@
             const r = await sbRpc('pk_garden_cmt_delete', { p_uid: c.uid, p_token: c.token, p_id: parseInt(bt.dataset.cdel, 10) });
             if (r && r.ok) { toast('评论已删除', '💬'); load(); }
             else toast('没删掉，再试一次', '⚠️');
-          } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+          } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
         };
       });
     };
@@ -2109,7 +2109,7 @@
         } else if (r && r.err === 'img_too_big') { toast('图片太大，换一张小点的', '⚠️'); }
         else if (r && r.err === 'too_fast') { toast('发得太快啦，休息一下再发', '⏳'); }
         else { toast('没发出去，再试一次', '⚠️'); }
-      } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+      } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
       btn.disabled = false;
     };
     $('#gardenSend').onclick = post;
@@ -2529,7 +2529,12 @@
         body: JSON.stringify(args || {}),
         signal: ctl.signal,
       });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (!res.ok) {
+        /* 云端函数抛出的中文提示（禁言等）透传给界面，别当成普通网络错误 */
+        let m = '';
+        try { m = (JSON.parse(await res.text()) || {}).message || ''; } catch (e) {}
+        throw new Error(m || ('HTTP ' + res.status));
+      }
       const txt = await res.text();
       return txt ? JSON.parse(txt) : null;
     } finally { clearTimeout(timer); }
@@ -2814,7 +2819,7 @@
         if (r && r.ok) { toast('专属红心已送出', '❤️'); load(); }
         else if (r && r.err === 'blocked') toast('你已被对方拉黑，送不出去', '🚫');
         else toast('没送出去，再试一次', '⚠️');
-      } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+      } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
       setTimeout(() => { fb.disabled = false; }, 1500);
     };
   }
@@ -2919,7 +2924,7 @@
           try {
             await sbRpc('pk_del_friend', { p_uid: c.uid, p_token: c.token, p_friend: b.dataset.del });
             toast('已移除', '👋'); load();
-          } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+          } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
         };
       });
     };
@@ -2950,7 +2955,7 @@
               if (r && r.ok) { toast('加好啦', '🤝'); b.textContent = '已添加'; b.disabled = true; load(); }
               else if (r && r.err === 'self') toast('这是你自己呀', '🙃');
               else toast('没加上，再试一次', '⚠️');
-            } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+            } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
           };
         });
       } catch (err) {
@@ -3142,7 +3147,7 @@
         clearInterval(commTimer); commTimer = null;
         ov.remove();
         toast(`已退出${mt.name}，下次随时再进`, '👋');
-      } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+      } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
     };
 
     $('#cpMembers').onclick = async () => {
@@ -3183,7 +3188,7 @@
               if (r && r.ok) { toast('加好啦', '🤝'); b.textContent = '已添加'; b.disabled = true; }
               else if (r && r.err === 'self') toast('这是你自己呀', '🙃');
               else toast('没加上，再试一次', '⚠️');
-            } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+            } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
           };
         });
         mpanel.querySelectorAll('[data-cm-blk]').forEach((b) => {
@@ -3236,7 +3241,7 @@
           else toast('没送出去，再试一次', '⚠️');
         }
         else toast('没送出去，再试一次', '⚠️');
-      } catch (err) { toast('网络不太顺，再试一次', '📡'); }
+      } catch (err) { toast((err && /禁言/.test(String(err.message))) ? String(err.message) : '网络不太顺，再试一次', '📡'); }
       setTimeout(() => { cf.disabled = false; }, 1500);
     };
   }

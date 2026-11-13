@@ -46,6 +46,11 @@
       emit({ type: 'empty' });
     },
 
+    /* 拉取 App Store 本地化价格（原生回调 window.__iapPrices(map)） */
+    prices() {
+      return post({ action: 'prices' });
+    },
+
     /* 原生层通过 evaluateJavaScript 调用：KKIAP.callback({...}) */
     callback(r) { emit(r); },
   };
