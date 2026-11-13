@@ -895,13 +895,13 @@ h3 small { font-weight: 400; }
 .chat-bub.them { margin-left: 0; }
 .chat-msg.mine .chat-bub.them { margin-left: 0; }
 .chat-bub.mine-bub { margin-left: 0; }
-.chat-input { flex: none; display: flex; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }
+.chat-input { flex: none; display: flex; gap: 8px; min-width: 0; max-width: 100%; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }
 .chat-input input {
-  flex: 1; padding: 11px 14px; border-radius: 13px; font-size: 14px; color: var(--text);
+  flex: 1 1 auto; min-width: 0; width: 100%; padding: 11px 14px; border-radius: 13px; font-size: 14px; color: var(--text);
   background: rgba(255, 255, 255, .07); border: 1px solid var(--line); outline: none;
 }
 .chat-input button {
-  flex: none; padding: 0 18px; border-radius: 13px; font-size: 14px; font-weight: 700; color: #2b1c00;
+  flex: 0 0 auto; white-space: nowrap; padding: 0 16px; border-radius: 13px; font-size: 14px; font-weight: 700; color: #2b1c00;
   background: linear-gradient(135deg, var(--gold), var(--gold2));
 }
 
@@ -1121,6 +1121,42 @@ h3 small { font-weight: 400; }
 }
 .chat-input .garden-pic:active { transform: scale(.93); }
 .chat-input .garden-pic.has { background: linear-gradient(135deg, #ffe9a8, #efbb45); }
+
+/* 拍照 / 相册 选择层（网页与 iOS 版通用，文案跟随界面语言，不中英混排） */
+.pick-mask {
+  position: fixed; inset: 0; z-index: 2100;
+  background: rgba(10, 6, 20, .55);
+  display: flex; align-items: flex-end; justify-content: center;
+  animation: pickFade .16s ease;
+}
+@keyframes pickFade { from { opacity: 0; } to { opacity: 1; } }
+.pick-sheet {
+  width: min(560px, 100%);
+  background: #241c3e; border: 1px solid var(--line); border-bottom: 0;
+  border-radius: 24px 24px 0 0;
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 9px;
+  animation: pickUp .22s cubic-bezier(.2, .8, .3, 1);
+}
+@keyframes pickUp { from { transform: translateY(40px); } to { transform: none; } }
+.pick-title {
+  font-size: 14px; font-weight: 700; color: var(--muted);
+  text-align: center; padding: 2px 0 6px;
+}
+.pick-item {
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  height: 52px; border-radius: 15px; font-size: 15px; font-weight: 600;
+  color: var(--text); background: rgba(255, 255, 255, .07);
+  border: 1px solid var(--line); transition: transform .12s, background .12s;
+}
+.pick-item span { font-size: 18px; line-height: 1; }
+.pick-item:active { transform: scale(.985); background: rgba(255, 255, 255, .12); }
+.pick-cancel {
+  height: 48px; margin-top: 3px; border-radius: 15px;
+  font-size: 15px; font-weight: 600; color: var(--muted);
+  background: transparent; border: 1px solid transparent;
+}
+.pick-cancel:active { background: rgba(255, 255, 255, .05); }
 
 /* 存档找回码 */
 .rec-code {

@@ -117,7 +117,7 @@
     '⏰ 小闹钟': '⏰ Timer',
     '定一个目标时间，页面顶部会一直显示倒计时': 'Set a goal time — the countdown stays at the top',
     '选日期': 'Pick a date', '选时间': 'Pick a time',
-    '取消': 'Cancel', '保存': 'Save', '收起': 'Close', '发送': 'Send', '搜索': 'Search',
+    '取消': 'Cancel', '保存': 'Save', '收起': 'Close', '发送': 'Send', '发布': 'Post', '搜索': 'Search',
     '进入': 'Enter', '收好了': 'Got it', '看完了': 'Done reading', '知道啦': 'Okay!',
     '再想想': 'Let me think', '确认删除': 'Confirm delete', '返回列表': 'Back to list',
     '要定一个将来的时间哦': 'Pick a future time',
@@ -151,13 +151,13 @@
     '🔄 重新开始健身': '🔄 Restart workouts',
     '⚙️ 基本信息': '⚙️ Basics', '点击展开': 'Tap to expand',
     '保存修改': 'Save changes', '已保存': 'Saved',
-    '烟龄（年）': 'Years smoking', '每天（支）': 'Per day (cigs)', '元/包': '¥ per pack',
-    '酒龄（年）': 'Years drinking', '白酒（斤/天）': 'Baijiu (jin/day)', '白酒 元/斤': 'Baijiu ¥/jin',
-    '啤酒（瓶/天）': 'Beer (bottles/day)', '啤酒 元/瓶': 'Beer ¥/bottle',
-    '香烟价格（元/包 20支）': 'Cigarette price (¥/pack of 20)',
+    '烟龄（年）': 'Years smoking', '每天（支）': 'Per day (cigs)', '元/包': 'Price per pack',
+    '酒龄（年）': 'Years drinking', '白酒（斤/天）': 'Baijiu (500g/day)', '白酒 元/斤': 'Baijiu price / 500g',
+    '啤酒（瓶/天）': 'Beer (bottles/day)', '啤酒 元/瓶': 'Beer price / bottle',
+    '香烟价格（元/包 20支）': 'Cigarette price (per pack of 20)',
     '每天抽烟数量（支）': 'Cigarettes per day',
-    '白酒价格（元/斤）': 'Baijiu price (¥/jin)',
-    '啤酒价格（元/瓶 500ML）': 'Beer price (¥/500ml bottle)',
+    '白酒价格（元/斤）': 'Baijiu price (per 500g)',
+    '啤酒价格（元/瓶 500ML）': 'Beer price (per 500ml bottle)',
     '平均每天白酒（斤）': 'Baijiu per day (jin)',
     '平均每天啤酒（瓶 500ML）': 'Beer per day (500ml)',
     '身高（cm）': 'Height (cm)', '体重（kg）': 'Weight (kg)',
@@ -356,6 +356,22 @@
     '输入兑换码续期': 'Enter code to extend',
     '激活会员': 'Redeem code', '兑换会员': 'Redeem code',
     '恢复购买': 'Restore purchases',
+    '管理订阅': 'Manage subscription',
+    '这句话里有不合规的词，换个说法吧': 'That contains a blocked word — please rephrase',
+    /* 举报 */
+    '🚩 举报': '🚩 Report',
+    '举报': 'Report',
+    '举报会直接提交给开发者人工核查，恶意举报也会被记录': 'Reports go straight to the developer for review; false reports are recorded too',
+    '📢 垃圾广告': '📢 Spam',
+    '🤬 辱骂骚扰': '🤬 Harassment',
+    '🔞 色情低俗': '🔞 Sexual content',
+    '⚠️ 其他违规': '⚠️ Something else',
+    '已收到举报，我们会尽快核实': 'Report received — we will review it soon',
+    '没提交成功，稍后再试': 'Could not submit, please try again',
+    '请在 Google Play 里管理订阅': 'Manage your subscription in Google Play',
+    '或': 'or',
+    '价格由 Google Play 按你所在的国家/地区显示': 'Prices shown by Google Play for your country/region',
+    '月付、年付为自动续订，到期前 24 小时内自动扣费，可随时取消': 'Monthly and yearly plans auto-renew; you are charged within 24 hours before each renewal and can cancel anytime',
     '激活失败，稍后再试': 'Redeem failed — try later',
     '激活码不对，检查一下有没有输错': 'Invalid code — check for typos',
     '这个激活码你已经用过了，每个码只能用一次': "You've already used this code — one use per code",
@@ -374,6 +390,15 @@
     '📅 设置打卡开始时间': '📅 Set check-in start date',
     '🖊️ 补签打卡': '🖊️ Make-up check-ins',
     '请在 App Store 版本中购买': 'Purchase inside the App Store version',
+    '请在 App Store 版本中恢复购买': 'Restore purchases inside the App Store version',
+    '请在 Google Play 版本中购买': 'Purchase inside the Google Play version',
+    '请在 Google Play 版本中恢复购买': 'Restore purchases inside the Google Play version',
+    '购买没成功，稍后再试': "Purchase didn't go through — try again later",
+    '没点上，再试一次': "Didn't register — try again",
+    '没送出去，再试一次': "Not sent — try again",
+    '购买成功了，会员已生效': 'Purchase complete — VIP is now active',
+    '正在恢复购买…': 'Restoring purchases…',
+    '没有找到可恢复的购买记录': 'No purchases found to restore',
 
     /* 打卡时间/补签日历 */
     '📅 打卡开始时间': '📅 Check-in start date',
@@ -412,7 +437,7 @@
     '开始戒烟': 'Smoke-free start', '开始戒酒': 'Sober start', '未打卡': 'Not checked in',
     '先看看': 'Just looking',
     '先不续': 'Not now',
-    '/ 月': '/ mo', '/ 年': '/ yr', '/ 永久': ' one-time',
+    '/ 月': '/ mo', '/ 年': '/ yr', '/ 永久': 'lifetime',
 
     /* 称号（戒烟） */
     '游客': 'Visitor', '小趴菜': 'Wobbly Rookie', '热血少年': 'Hot-Blooded Youth',
@@ -703,13 +728,27 @@
   var PRICE = {};
   var PRICE_ANY = false;
 
+  /* ---------------- 界面语言 ----------------
+     1. 用户手动切过 → 用他的选择（存 localStorage.kk_lang）
+     2. 没切过 → 跟随手机系统语言：中文系统用中文，其余一律英文
+     注意：这里只认「中文 / 英文」两种，因为词库只有这两套。
+     系统是日语、德语等的用户会落到英文，不会看到中文界面。 */
+  function sysLoc() {
+    try {
+      var l = (navigator.languages && navigator.languages.length)
+        ? navigator.languages.join(',')
+        : (navigator.language || '');
+      return String(l || '').toLowerCase();
+    } catch (e) { return ''; }
+  }
+
   function detect() {
     try {
       var s = localStorage.getItem('kk_lang');
       if (s === 'en' || s === 'zh') return s;
     } catch (e) {}
-    /* 网页 / 安卓默认中文；iOS 构建时会把下面一行替换为 return 'en'; */
-    return 'zh';
+    /* 系统语言里有中文（zh、zh-CN、zh-TW、zh-HK…）就用中文 */
+    return /(^|,)zh/.test(sysLoc()) ? 'zh' : 'en';
   }
   var LANG = detect();
 
@@ -821,23 +860,30 @@
     var credit = document.querySelector('.brand-credit');
     if (credit) credit.style.display = 'none';
   }
-  /* 登录页语言快捷切换（国旗按钮） */
+  /* 登录页语言快捷切换（国旗按钮）：
+     英文界面 → China / English；中文界面 → 中文 / English（不混排） */
   function bindLangPick() {
     var zh = document.getElementById('langZh'), en = document.getElementById('langEn');
     if (!zh || !en) return;
+    zh.textContent = LANG === 'en' ? 'China' : '中文';
+    en.textContent = 'English';
     zh.classList.toggle('on', LANG === 'zh');
     en.classList.toggle('on', LANG === 'en');
     zh.onclick = function () { if (LANG !== 'zh') setLang('zh'); };
     en.onclick = function () { if (LANG !== 'en') setLang('en'); };
   }
 
-  /* 菜单语言切换面板（由 game.js 调用） */
+  /* 菜单语言切换面板（由 game.js 调用）：标题与选项都只显示当前界面的语言 */
   function langSheet(sheetFn, closeFn) {
-    var cur = LANG === 'en' ? 'English' : '中文';
-    sheetFn('<h3>🌐 Language / 语言</h3><p class="sheet-sub">Current: ' + cur + '</p>' +
+    var isEn = LANG === 'en';
+    var cur = isEn ? 'English' : '中文';
+    var title = isEn ? '🌐 Language' : '🌐 语言';
+    var sub = (isEn ? 'Current: ' : '当前：') + cur;
+    var zhLabel = isEn ? 'China' : '中文';
+    sheetFn('<h3>' + title + '</h3><p class="sheet-sub">' + sub + '</p>' +
       '<div class="sheet-actions col">' +
-      '<button class="btn btn-primary btn-lg' + (LANG === 'en' ? ' lang-on' : '') + '" id="lgEn">English</button>' +
-      '<button class="btn btn-primary btn-lg' + (LANG === 'zh' ? ' lang-on' : '') + '" id="lgZh">中文</button>' +
+      '<button class="btn btn-primary btn-lg' + (isEn ? ' lang-on' : '') + '" id="lgEn">English</button>' +
+      '<button class="btn btn-primary btn-lg' + (isEn ? '' : ' lang-on') + '" id="lgZh">' + zhLabel + '</button>' +
       '</div>');
     document.getElementById('lgEn').onclick = function () { setLang('en'); };
     document.getElementById('lgZh').onclick = function () { setLang('zh'); };

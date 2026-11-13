@@ -125,7 +125,7 @@
   function syncSheet() {
     const show = () => {
       const rows = [
-        ['登录方式', S.acct ? '账号密码登录（支持云同步）' : '一键登录 / 游客（只存本机，不同步）'],
+        ['登录方式', S.g ? 'Google 登录（支持云同步）' : S.acct ? '账号密码登录（支持云同步）' : '一键登录 / 游客（只存本机，不同步）'],
         ['账号', S.acct || '—'],
         ['本机最后改动', fmtTs(S.updatedAt)],
         ['上次上传成功', fmtTs(SYNC.up) + (saveDirty ? ' · 有改动待上传' : '')],
@@ -222,6 +222,54 @@
     $('#toastWrap').appendChild(t);
     setTimeout(() => t.classList.add('out'), 2200);
     setTimeout(() => t.remove(), 2600);
+  }
+
+  /* ---------------- 货币单位 ----------------
+     用户填的烟价/酒价是他当地的真实价格，所以单位要跟着他所在的国家走，
+     不是跟着界面语言走（一个在日本的用户用英文界面，也该看到日元）。
+     不看汇率、不做换算：数值就是他填的数，只是换个单位写法。 */
+  function curUnit() {
+    const loc = String((typeof navigator !== 'undefined' && navigator.language) || '').toLowerCase();
+    if (loc.indexOf('zh') === 0) return '元';
+    if (loc.indexOf('ja') === 0) return '日元';
+    if (loc.indexOf('ko') === 0) return '원';
+    if (loc.indexOf('en-gb') === 0) return '£';
+    if (loc.indexOf('en') === 0) return '$';
+    if (loc.indexOf('pt-br') === 0) return 'R$';
+    if (/^(de|fr|es|it|pt|nl|el|fi|sv|da|no|pl|cs|ro|hu)/.test(loc)) return '€';
+    if (loc.indexOf('ru') === 0) return '₽';
+    if (loc.indexOf('hi') === 0) return '₹';
+    if (loc.indexOf('th') === 0) return '฿';
+    if (loc.indexOf('vi') === 0) return '₫';
+    if (loc.indexOf('id') === 0) return 'Rp';
+    if (loc.indexOf('tr') === 0) return '₺';
+    if (loc.indexOf('ar') === 0) return 'SAR';
+    return '$';
+  }
+
+  /* ---------------- 违规词（与服务端词库同源，前端先拦一次，提示更友好） ---------------- */
+  const BAD_WORDS = [
+    '加微信', '加我微信', '微信号', '加vx', '加v信', '加薇', '薇信', '加扣扣', '加qq', 'q群',
+    'telegram', '电报群', '纸飞机', 'whatsapp', '代购', '刷单', '日赚', '躺赚', '兼职日结',
+    '博彩', '赌博', '棋牌', '彩票', '下注', '网贷', '贷款秒批', '引流', '推广加', '扫码加',
+    'http://', 'https://', 'www.', 't.me',
+    '约炮', '一夜情', '裸聊', '色情', '成人视频', 'porn', 'onlyfans',
+    '傻逼', '傻b', '煞笔', '草泥马', '操你妈', '去死吧', '贱人', '婊子',
+    'fuck you', 'motherfucker', 'bitch', 'asshole',
+  ];
+  function badWordHit(text) {
+    const s = String(text || '').toLowerCase();
+    if (!s) return '';
+    for (let i = 0; i < BAD_WORDS.length; i++) {
+      if (s.indexOf(BAD_WORDS[i]) >= 0) return BAD_WORDS[i];
+    }
+    return '';
+  }
+  /* 发送前统一检查；返回 true 表示放行 */
+  function passGuard(text) {
+    if (!badWordHit(text)) return true;
+    toast('这句话里有不合规的词，换个说法吧', '⚠️');
+    return false;
   }
 
   /* ---------------- 称号 ---------------- */
@@ -485,6 +533,7 @@
       restoreDays(acc, r);
     }
     acc.acct = user;
+    acc.g = false;
     acc.cloud = { uid: r.uid, token: r.token };
     DB.accounts[key] = acc;
     DB.current = key;
@@ -773,7 +822,7 @@
           ['开始戒烟', started ? startLabel(started) : '未开始'],
           ['已戒烟', started ? fmtDur(Date.now() - started) : '未开始'],
           ['累计少吸', cigs.toFixed(1) + ' 支'],
-          ['节省金额', money.toFixed(1) + ' 元'],
+          ['节省金额', money.toFixed(1) + ' ' + curUnit()],
           ['寿命', life + ' 天']
         ])}
       </div>
@@ -865,7 +914,7 @@
           ['已戒酒', started ? fmtDur(Date.now() - started) : '未开始'],
           ['少喝白酒', bj + ' 斤'],
           ['少喝啤酒', beer + ' 瓶'],
-          ['节省金额', money.toFixed(1) + ' 元'],
+          ['节省金额', money.toFixed(1) + ' ' + curUnit()],
           ['寿命', life + ' 天']
         ])}
       </div>
@@ -1734,6 +1783,57 @@
   let picSink = null;
   window.__onNativePic = (d) => { if (picSink) picSink(d); };
 
+  /* 调原生相机选择：把当前界面语言传过去，弹窗只显示一种文字 */
+  function camPick() {
+    if (!(window.NativeCam && window.NativeCam.pick)) return;
+    let l = 'zh';
+    try { if (window.KKI18N && window.KKI18N.lang) l = window.KKI18N.lang(); } catch (e) {}
+    try { window.NativeCam.pick(l); } catch (e) { window.NativeCam.pick(); }
+  }
+
+  function uiIsEn() {
+    try { return !!(window.KKI18N && window.KKI18N.lang && window.KKI18N.lang() === 'en'); } catch (e) { return false; }
+  }
+
+  /* 网页 / iOS：自建选择层，文案跟随界面语言（不再中英混排）；
+     拍照用 capture 直达相机，相册走系统选择器 —— 三个版本观感一致 */
+  function webPick(cb) {
+    if (document.getElementById('pickMask')) return;
+    const en = uiIsEn();
+    const m = document.createElement('div');
+    m.className = 'pick-mask';
+    m.id = 'pickMask';
+    m.innerHTML = `
+      <div class="pick-sheet">
+        <div class="pick-title">${en ? 'Add photo' : '添加图片'}</div>
+        <button class="pick-item" data-mode="cam"><span>📷</span>${en ? 'Take photo' : '拍照'}</button>
+        <button class="pick-item" data-mode="lib"><span>🖼</span>${en ? 'Photo library' : '从相册选择'}</button>
+        <button class="pick-cancel">${en ? 'Cancel' : '取消'}</button>
+      </div>`;
+    document.body.appendChild(m);
+    const close = () => m.remove();
+    m.addEventListener('click', (e) => { if (e.target === m) close(); });
+    m.querySelector('.pick-cancel').onclick = close;
+    m.querySelectorAll('.pick-item').forEach((b) => {
+      b.onclick = () => { const mode = b.dataset.mode; close(); openFileInput(mode, cb); };
+    });
+  }
+
+  function openFileInput(mode, cb) {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = 'image/*';
+    inp.className = 'file-off';
+    if (mode === 'cam') inp.setAttribute('capture', 'environment');
+    inp.onchange = () => {
+      const f = inp.files && inp.files[0];
+      setTimeout(() => inp.remove(), 800);
+      if (f) cb(f);
+    };
+    document.body.appendChild(inp);
+    inp.click();
+  }
+
   /* 图片压缩成 jpeg dataURL（最长边 720，压到 200KB 以内） */
   function gardenCompress(file, cb) {
     const url = URL.createObjectURL(file);
@@ -1781,9 +1881,7 @@
       <div class="chat-body garden-body" id="gardenBody"><p class="muted tiny" style="text-align:center;margin-top:30px">正在走进花园…</p></div>
       <div class="garden-pend hidden" id="gardenPend"></div>
       <div class="chat-input">
-        ${hasNativeCam
-          ? '<button class="garden-pic" id="gardenPic" title="添加照片">📷</button>'
-          : '<label class="garden-pic" id="gardenPic" title="添加照片">📷<input type="file" id="gardenFile" accept="image/*" class="file-real"></label>'}
+        <button class="garden-pic" id="gardenPic" title="添加照片">📷</button>
         <input id="gardenText" maxlength="200" placeholder="和大家分享你的坚持…" autocomplete="off">
         <button id="gardenSend">发布</button>
       </div>`;
@@ -1846,7 +1944,8 @@
                 <div class="gd-actions">
                   <button class="gd-like${liked ? ' on' : ''}" data-like="${m.id}">👍${m.likes ? ' ' + m.likes : ''}</button>
                   <button class="gd-cmtbtn" data-cbtn="${m.id}">💬${list.length ? ' ' + list.length : ''}</button>
-                  ${mine ? `<button class="gd-del" data-id="${m.id}">删</button>` : ''}
+                  ${mine ? `<button class="gd-del" data-id="${m.id}">删</button>`
+                         : `<button class="gd-rep" data-rep="${m.id}" data-uid="${esc(who.uid || '')}" data-nick="${esc(who.nickname || '玩家')}">举报</button>`}
                 </div>
               </div>
               <div class="gd-cmts">${cmtHtml}${more}${cmtRow}</div>
@@ -1895,6 +1994,7 @@
           const inp = row.querySelector('input');
           const t = inp.value.trim();
           if (!t) return toast('评论不能为空', '💬');
+          if (!passGuard(t)) return;
           bt.disabled = true;
           try {
             const r = await sbRpc('pk_garden_cmt_send', { p_uid: c.uid, p_token: c.token, p_post_id: parseInt(bt.dataset.csend, 10), p_text: t });
@@ -1907,6 +2007,18 @@
       /* 查看更多评论 */
       $$('.gd-more').forEach((bt) => {
         bt.onclick = () => { cmtAll.add(parseInt(bt.dataset.more, 10)); draw(posts, cmts); };
+      });
+      /* 举报别人的动态 */
+      $$('.gd-rep').forEach((bt) => {
+        bt.onclick = () => {
+          const item = bt.closest('.gd-item');
+          const core = item ? item.querySelector('.gd-core') : null;
+          reportSheet(
+            { uid: bt.dataset.uid, nickname: bt.dataset.nick },
+            'post', bt.dataset.rep,
+            core ? core.textContent.trim() : ''
+          );
+        };
       });
       /* 删自己的动态 */
       $$('.gd-del[data-id]').forEach((bt) => {
@@ -1974,15 +2086,16 @@
         toast('图片已选好，点发布', '📷');
       };
       picSink = gardenSink;
-      $('#gardenPic').onclick = () => window.NativeCam.pick();
+      $('#gardenPic').onclick = () => camPick();
     } else {
-      $('#gardenFile').onchange = (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; addFile(f); };
+      $('#gardenPic').onclick = () => webPick((f) => addFile(f));
     }
 
     const post = async () => {
       const el = $('#gardenText');
       const t = el.value.trim();
       if (!t && !pending.length) return toast('写点什么，或加张图片', '🌷');
+      if (t && !passGuard(t)) return;
       const btn = $('#gardenSend');
       btn.disabled = true;
       try {
@@ -2405,13 +2518,14 @@
     }
     return S.cloud;
   }
-  async function sbRpc(fn, args) {
+  async function sbRpc(fn, args, auth) {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 12000);
     try {
       const res = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`, {
         method: 'POST',
-        headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' },
+        /* auth 传 Supabase 用户会话令牌时，服务端能拿到 auth.uid()，用于校验 Google 登录身份 */
+        headers: { apikey: SB_KEY, Authorization: 'Bearer ' + (auth || SB_KEY), 'Content-Type': 'application/json' },
         body: JSON.stringify(args || {}),
         signal: ctl.signal,
       });
@@ -2507,6 +2621,7 @@
       <div class="pc-acts">
         <button class="fr-btn" id="pcDm">💬 私信</button>
         <button class="fr-btn ghost" id="pcBlock">${isBlocked ? '✅ 已拉黑' : '🚫 拉黑'}</button>
+        <button class="fr-btn ghost" id="pcReport">🚩 举报</button>
       </div>
       <p class="muted tiny" style="text-align:center;margin:12px 0 0">点别人的头像，随时可以管理 TA</p>
     </div>`;
@@ -2553,6 +2668,7 @@
       }
     };
     $('#pcDm').onclick = () => { closePlayerCard(); openDm(peer); };
+    $('#pcReport').onclick = () => { closePlayerCard(); reportSheet(peer, 'profile', peer.uid, peer.nickname || '玩家'); };
     $('#pcBlock').onclick = async () => {
       const on = $('#pcBlock').dataset.on === '1';
       if (await toggleBlock(peer, !on)) {
@@ -2593,9 +2709,7 @@
       <div class="chat-body" id="dmBody"><p class="muted tiny" style="text-align:center">加载中…</p></div>
       <div class="garden-pend hidden" id="dmPend"></div>
       <div class="chat-input">
-        ${hasNativeCam
-          ? '<button class="garden-pic" id="dmPic" title="发送图片">📷</button>'
-          : '<label class="garden-pic" id="dmPic" title="发送图片">📷<input type="file" id="dmFile" accept="image/*" class="file-real"></label>'}
+        <button class="garden-pic" id="dmPic" title="发送图片">📷</button>
         ${vipOn() ? '<button class="heart-btn" id="dmFlower" title="送一颗专属红心">❤️</button>' : ''}
         <input id="dmText" maxlength="200" placeholder="说点什么…" autocomplete="off">
         <button id="dmSend">发送</button>
@@ -2661,6 +2775,7 @@
       const el = $('#dmText');
       const t = el.value.trim();
       if (!t && !pendingImg) return;
+      if (t && !passGuard(t)) return;
       el.value = '';
       const img = pendingImg;
       pendingImg = '';
@@ -2683,15 +2798,12 @@
     /* 📷 发图片：App 内走原生（拍照 / 相册），网页 / iOS 走系统文件选择 */
     if (hasNativeCam) {
       picSink = addDmImg;
-      $('#dmPic').onclick = () => window.NativeCam.pick();
+      $('#dmPic').onclick = () => camPick();
     } else {
-      $('#dmFile').onchange = (e) => {
-        const f = e.target.files && e.target.files[0];
-        e.target.value = '';
-        if (!f) return;
+      $('#dmPic').onclick = () => webPick((f) => {
         if (!/^image\//.test(f.type)) return toast('只能发图片哦', '📷');
         gardenCompress(f, (d) => { if (!d) return toast('图片太大，换一张小点的', '⚠️'); addDmImg(d); });
-      };
+      });
     }
     const fb = $('#dmFlower');
     if (fb) fb.onclick = async () => {
@@ -2705,6 +2817,39 @@
       } catch (err) { toast('网络不太顺，再试一次', '📡'); }
       setTimeout(() => { fb.disabled = false; }, 1500);
     };
+  }
+
+  /* 举报（Google Play / App Store 对含用户内容的应用都要求有举报入口） */
+  const REPORT_REASONS = [
+    ['spam', '📢 垃圾广告'],
+    ['abuse', '🤬 辱骂骚扰'],
+    ['sexual', '🔞 色情低俗'],
+    ['other', '⚠️ 其他违规'],
+  ];
+  function reportSheet(peer, kind, refId, snapshot) {
+    sheet(`<h3>🚩 举报</h3>
+      <p class="sheet-sub">举报会直接提交给开发者人工核查，恶意举报也会被记录</p>
+      <div class="sheet-actions col">
+        ${REPORT_REASONS.map(([k, label]) => `<button class="btn btn-ghost btn-lg" data-rp="${k}">${label}</button>`).join('')}
+        <button class="btn btn-ghost btn-lg" id="rpCancel">取消</button>
+      </div>`);
+    $('#rpCancel').onclick = closeSheet;
+    $$('[data-rp]').forEach((b) => {
+      b.onclick = async () => {
+        const c = cloudId();
+        const btn = b;
+        btn.disabled = true;
+        try {
+          const r = await sbRpc('pk_report', {
+            p_uid: c.uid, p_token: c.token, p_target: peer.uid,
+            p_kind: kind, p_ref: String(refId || ''), p_reason: btn.dataset.rp,
+            p_snapshot: String(snapshot || '').slice(0, 500),
+          });
+          if (r && r.ok) { closeSheet(); toast('已收到举报，我们会尽快核实', '🙏'); }
+          else { btn.disabled = false; toast('没提交成功，稍后再试', '⚠️'); }
+        } catch (e) { btn.disabled = false; toast('连不上云端，检查一下网络', '📡'); }
+      };
+    });
   }
 
   /* 拉黑 / 取消拉黑 */
@@ -3061,6 +3206,7 @@
       const el = $('#commText');
       const t = el.value.trim();
       if (!t) return;
+      if (!passGuard(t)) return;
       el.value = '';
       try {
         const r = await sbRpc('pk_chat_send', { p_uid: c.uid, p_token: c.token, p_module: mod, p_body: t });
@@ -3223,6 +3369,7 @@
       if (btn) { communityView(btn.dataset.mod || 'smoke'); }
     });
     $('#menuBtn').addEventListener('click', () => {
+      const EN = (() => { try { return !!(window.KKI18N && window.KKI18N.lang && window.KKI18N.lang() === 'en'); } catch (e) { return false; } })();
       const isAndroid = /Android/i.test(navigator.userAgent);
       sheet(`<h3>${esc(S.nickname || '我')} 的菜单</h3>
         <p class="sheet-sub">分享给朋友，或管理当前账号</p>
@@ -3231,18 +3378,20 @@
           ${isAndroid ? `<button class="menu-row" id="mApk"><span>📥</span><div><b>下载安卓 App</b><small>安装包下载到手机，装好就是原生应用</small></div></button>` : ''}
           <button class="menu-row" id="mShare"><span>🔗</span><div><b>分享链接</b><small>复制网页链接或安装包链接</small></div></button>
           <button class="menu-row" id="mVip"><span>🎫</span><div><b>会员中心</b><small>${vipOn() ? '已开通 · 还剩 ' + vipLeftDays() + ' 天' : '输入激活码开通'}</small></div></button>
-          <button class="menu-row" id="mAccount"><span>🔑</span><div><b>${S.acct ? '我的账号' : '账号密码登录'}</b><small>${S.acct ? esc(S.acct) + ' · 换手机可找回记录' : '登录后换手机也能找回打卡记录'}</small></div></button>
+          ${S.acct && !S.g ? `<button class="menu-row" id="mAccount"><span>🔑</span><div><b>我的账号</b><small>${esc(S.acct)} · 换手机可找回记录</small></div></button>` : ''}
+          ${S.acct ? '' : `<button class="menu-row" id="mAccount"><span>🔑</span><div><b>账号密码登录</b><small>登录后换手机也能找回打卡记录</small></div></button>`}
           ${new URLSearchParams(location.search).has('sync') ? `<button class="menu-row" id="mSync"><span>☁️</span><div><b>云同步</b><small>同步状态诊断（调试入口）</small></div></button>` : ''}
           ${S.acct ? '' : `<button class="menu-row" id="mRecCode"><span>🛟</span><div><b>存档找回码</b><small>${S.recCode ? esc(S.recCode) : '重装 / 换手机后凭码找回这份记录'}</small></div></button>`}
           <button class="menu-row" id="mService"><span>💬</span><div><b>联系客服</b><small>加微信，问题随时找我</small></div></button>
-          <button class="menu-row" id="mLang"><span>🌐</span><div><b>Language / 语言</b><small>English · 中文</small></div></button>
+          <button class="menu-row" id="mLang"><span>🌐</span><div><b>${EN ? 'Language' : '语言'}</b><small>${EN ? 'English · Chinese' : '中文 · 英文'}</small></div></button>
           <button class="menu-row danger" id="mLogout"><span>🚪</span><div><b>退出登录</b><small>记录会保留，可重新登录</small></div></button>
         </div>`);
       const ma = $('#mApk');
       if (ma) ma.onclick = downloadApk;
       $('#mShare').onclick = shareSheet;
       $('#mVip').onclick = vipSheet;
-      $('#mAccount').onclick = () => { if (S.acct) accountSheet(); else openAcctLogin(); };
+      const mac = $('#mAccount');
+      if (mac) mac.onclick = () => { if (S.acct) accountSheet(); else openAcctLogin(); };
       const ms = $('#mSync');
       if (ms) ms.onclick = syncSheet;
       const mrc = $('#mRecCode');
