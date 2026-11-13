@@ -29,7 +29,8 @@ targets:
   KuailePeqi:
     type: application
     platform: iOS
-    infoPlist: Info.plist
+    info:
+      path: Info.plist
     sources:
       - path: ../ios/native/AppShell.swift
       - path: ../ios/native/PrivacyInfo.xcprivacy
