@@ -24,6 +24,7 @@
   let DB = null;
   let S = null;
   let tab = 'peki';
+  let lastDay = todayStr();
   const sceneIdxs = { smoke: 0, alcohol: 0, fit: 0 };
   const infoOpen = { smoke: false, alcohol: false, fit: false };
 
@@ -206,12 +207,20 @@
     return s;
   }
 
-  /* ---------------- 弹层 / 提示 ---------------- */
+  /* ---------------- 弹层 / 提示 ----------------
+     防「幽灵点击」：手机上双击、或者弹层关闭后紧接着的那一下，
+     会因为落点上的元素已经换了，误触到下面的按钮（切标签、点菜单行）。
+     所以弹层打开后 300ms 内的点击一律吞掉，关闭后 320ms 内也吞掉。 */
+  let uiGuardUntil = 0;
+  function uiGuard(ms) { uiGuardUntil = Math.max(uiGuardUntil, Date.now() + (ms || 320)); }
+  function uiBlocked() { return Date.now() < uiGuardUntil; }
   function sheet(html) {
+    uiGuard(300);
     $('#sheetRoot').innerHTML = `<div class="sheet-mask in"><div class="sheet in">${html}</div></div>`;
     $('.sheet-mask').addEventListener('click', (e) => { if (e.target.classList.contains('sheet-mask')) closeSheet(); });
   }
   function closeSheet() {
+    uiGuard(320);
     $('#sheetRoot').innerHTML = '';
     if (typeof feedTimer !== 'undefined' && feedTimer) { clearInterval(feedTimer); feedTimer = null; }
   }
@@ -602,78 +611,78 @@
   }
   function acctChangePass() {
     if (!S || !S.acct) return;
-    sheet(`<h3>🔒 修改密码</h3>
-      <p class="sheet-sub">账号：${esc(S.acct)}</p>
+    sheet(`<h3>${LZ('🔒 修改密码', '🔒 Change password')}</h3>
+      <p class="sheet-sub">${LZ('账号：' + esc(S.acct), 'Account: ' + esc(S.acct))}</p>
       <div class="form">
-        <label>当前密码</label><input id="pwOld" type="password" maxlength="32">
-        <label>新密码</label><input id="pwNew" type="password" maxlength="32" placeholder="至少 6 位">
-        <button class="btn btn-primary btn-lg" id="pwGo" style="margin-top:12px">保存新密码</button>
+        <label>${LZ('当前密码', 'Current password')}</label><input id="pwOld" type="password" maxlength="32">
+        <label>${LZ('新密码', 'New password')}</label><input id="pwNew" type="password" maxlength="32" placeholder="${LZ('至少 6 位', 'At least 6 characters')}">
+        <button class="btn btn-primary btn-lg" id="pwGo" style="margin-top:12px">${LZ('保存新密码', 'Save new password')}</button>
       </div>`);
     $('#pwGo').onclick = async () => {
       const o = $('#pwOld').value, n = $('#pwNew').value;
-      if (n.length < 6) return toast('新密码至少 6 位', '🔒');
+      if (n.length < 6) return toast(LZ('新密码至少 6 位', 'At least 6 characters'), '🔒');
       const c = cloudId();
       try {
         const r = await sbRpc('pk_change_pass', { p_uid: c.uid, p_token: c.token, p_old: o, p_new: n });
-        if (r && r.ok) { closeSheet(); toast('密码已更新，记牢它', '🔒'); }
-        else if (r && r.err === 'wrong_old') toast('当前密码不对', '⚠️');
-        else if (r && r.err === 'bad_new') toast('新密码至少 6 位', '⚠️');
-        else toast('没改成，稍后再试', '⚠️');
-      } catch (e) { toast('连不上云端，检查一下网络', '📡'); }
+        if (r && r.ok) { closeSheet(); toast(LZ('密码已更新，记牢它', 'Password updated'), '🔒'); }
+        else if (r && r.err === 'wrong_old') toast(LZ('当前密码不对', 'Current password is wrong'), '⚠️');
+        else if (r && r.err === 'bad_new') toast(LZ('新密码至少 6 位', 'At least 6 characters'), '⚠️');
+        else toast(LZ('没改成，稍后再试', 'Could not change it — try again'), '⚠️');
+      } catch (e) { toast(LZ('连不上云端，检查一下网络', 'Cannot reach the server — check your network'), '📡'); }
     };
   }
   function accountSheet() {
     if (!S || !S.acct) return openAcctLogin();
-    sheet(`<h3>🔑 我的账号</h3>
-      <p class="sheet-sub">当前账号：${esc(S.acct)} · 换手机登录这个账号就能找回记录</p>
+    sheet(`<h3>${LZ('🔑 我的账号', '🔑 My Account')}</h3>
+      <p class="sheet-sub">${LZ('当前账号：' + esc(S.acct) + ' · 换手机登录这个账号就能找回记录', 'Signed in as ' + esc(S.acct) + ' · sign in on a new phone to restore your data')}</p>
       <div class="sheet-actions col">
-        <button class="btn btn-primary btn-lg" id="acctPwd">修改密码</button>
-        <button class="btn btn-danger" id="acctDel">注销账号并删除全部数据</button>
+        <button class="btn btn-primary btn-lg" id="acctPwd">${LZ('修改密码', 'Change password')}</button>
+        <button class="btn btn-danger" id="acctDel">${LZ('注销账号并删除全部数据', 'Delete account and all data')}</button>
       </div>
-      <p class="muted tiny" style="text-align:center;margin-top:10px">注销后账号、打卡记录、帖子、聊天记录全部删除，无法恢复</p>`);
+      <p class="muted tiny" style="text-align:center;margin-top:10px">${LZ('注销后账号、打卡记录、帖子、聊天记录全部删除，无法恢复', 'This permanently deletes your account, check-ins, posts and chats. It cannot be undone.')}</p>`);
     $('#acctPwd').onclick = acctChangePass;
     $('#acctDel').onclick = acctDelete;
   }
 
   /* 注销账号：先清云端（账号凭据 + 打卡 + 帖子 + 聊天 + 好友），再删本机存档 */
   function acctDelete() {
-    sheet(`<h3>确定要注销账号吗？</h3>
-      <p class="sheet-sub">「${esc(S.nickname || '玩家')}」的账号、打卡记录、积分、小纸条、花园帖子、聊天记录会被永久删除，好友和社区里都搜不到你。此操作不可恢复。</p>
-      <p class="sheet-sub">如果只是想删掉某条帖子或聊天，可以在对应页面单独删除，不必注销账号。</p>
+    sheet(`<h3>${LZ('确定要注销账号吗？', 'Delete your account?')}</h3>
+      <p class="sheet-sub">${LZ('「' + esc(S.nickname || '玩家') + '」的账号、打卡记录、积分、小纸条、花园帖子、聊天记录会被永久删除，好友和社区里都搜不到你。此操作不可恢复。', 'Everything for "' + esc(S.nickname || 'Player') + '" — account, check-ins, points, notes, garden posts and chats — will be deleted for good. Friends and the community will no longer find you. This cannot be undone.')}</p>
+      <p class="sheet-sub">${LZ('如果只是想删掉某条帖子或聊天，可以在对应页面单独删除，不必注销账号。', 'If you only want to remove a post or a chat, delete it on that page instead — no need to delete the account.')}</p>
       <div class="sheet-actions">
-        <button class="btn btn-ghost" id="acctDelNo">再想想</button>
-        <button class="btn btn-danger" id="acctDelYes">确认注销</button>
+        <button class="btn btn-ghost" id="acctDelNo">${LZ('再想想', 'Cancel')}</button>
+        <button class="btn btn-danger" id="acctDelYes">${LZ('确认注销', 'Delete')}</button>
       </div>`);
     $('#acctDelNo').onclick = accountSheet;
     $('#acctDelYes').onclick = async () => {
       const btn = $('#acctDelYes');
-      btn.disabled = true; btn.textContent = '正在删除…';
+      btn.disabled = true; btn.textContent = LZ('正在删除…', 'Deleting…');
       const id = DB.current;
       try { await purgeCloud(S); } catch (e) {}
       try { if (id) delete DB.accounts[id]; DB.current = null; persist(); } catch (e) {}
       closeSheet();
-      toast('账号与全部数据已删除', '🗑️');
+      toast(LZ('账号与全部数据已删除', 'Account and all data deleted'), '🗑️');
       setTimeout(() => location.reload(), 900);
     };
   }
 
   function logout() {
-    sheet(`<h3>退出当前账号？</h3><p class="sheet-sub">退出后这份坚持记录会保留，重新登录即可继续。</p>
-      <div class="sheet-actions"><button class="btn btn-ghost" id="noOut">取消</button>
-      <button class="btn btn-danger" id="yesOut">退出登录</button></div>`);
+    sheet(`<h3>${LZ('退出当前账号？', 'Log out?')}</h3><p class="sheet-sub">${LZ('退出后这份坚持记录会保留，重新登录即可继续。', 'Your records stay on this device — log back in to continue.')}</p>
+      <div class="sheet-actions"><button class="btn btn-ghost" id="noOut">${LZ('取消', 'Cancel')}</button>
+      <button class="btn btn-danger" id="yesOut">${LZ('退出登录', 'Log out')}</button></div>`);
     $('#noOut').onclick = closeSheet;
     $('#yesOut').onclick = () => { DB.current = null; persist(); location.reload(); };
   }
   function resetModule(mod) {
-    const names = { smoke: '戒烟', alcohol: '戒酒', fit: '运动' };
-    sheet(`<h3>重新开始${names[mod]}？</h3><p class="sheet-sub">会清空${names[mod]}的全部打卡记录和开始时间，不能撤销。</p>
-      <div class="sheet-actions"><button class="btn btn-ghost" id="noReset">取消</button>
-      <button class="btn btn-danger" id="yesReset">重新开始</button></div>`);
+    const names = { smoke: LZ('戒烟', 'smoking'), alcohol: LZ('戒酒', 'drinking'), fit: LZ('运动', 'workout') };
+    sheet(`<h3>${LZ('重新开始' + names[mod] + '？', 'Restart ' + names[mod] + '?')}</h3><p class="sheet-sub">${LZ('会清空' + names[mod] + '的全部打卡记录和开始时间，不能撤销。', 'This clears all your ' + names[mod] + ' check-ins and start date. It cannot be undone.')}</p>
+      <div class="sheet-actions"><button class="btn btn-ghost" id="noReset">${LZ('取消', 'Cancel')}</button>
+      <button class="btn btn-danger" id="yesReset">${LZ('重新开始', 'Restart')}</button></div>`);
     $('#noReset').onclick = closeSheet;
     $('#yesReset').onclick = () => {
       S[mod] = null;
       persist(); closeSheet();
-      toast(`已重新开始${names[mod]}`, '🌱');
+      toast(LZ('已重新开始' + names[mod], 'Restarted ' + names[mod]), '🌱');
       render();
     };
   }
@@ -1224,16 +1233,36 @@
   }
   function woSecs() { return TL.acc + (TL.run ? (Date.now() - TL.t0) / 1000 : 0); }
   function woPaintClock() { const c = $('#woClock'); if (c) c.textContent = fmtSec(woSecs()); }
-  function woToggle() {
-    if (TL.run) { TL.acc = woSecs(); TL.run = false; }
-    else { TL.t0 = Date.now(); TL.run = true; }
-    const b = $('[data-woact="toggle"]'); if (b) b.textContent = TL.run ? LZ('暂停', 'Pause') : LZ('开始', 'Start');
+  /* 同一时间只允许一个计时器在跑：开始新的，就把其他的先暂停（时间保留，不会丢） */
+  function stopOtherTimers(keep) {
+    if (keep !== 'main' && TL.run) { TL.acc = woSecs(); TL.run = false; TL.t0 = null; }
+    for (const rid in TL.rings) {
+      const st = TL.rings[rid];
+      if (rid !== keep && st && st.run) { st.done += (Date.now() - st.t0) / 1000; st.run = false; st.t0 = null; }
+    }
+    TL.cards.forEach((c, ci) => {
+      if ('c' + ci !== keep && c.run) { c.acc = cardSecs(c); c.run = false; c.t0 = null; }
+    });
+  }
+  function paintTimers() {
+    const b = $('[data-woact="toggle"]');
+    if (b) b.textContent = TL.run ? LZ('暂停', 'Pause') : LZ('开始', 'Start');
+    TL.cards.forEach((c, ci) => {
+      const el = $(`[data-woact="ctoggle"][data-ci="${ci}"]`);
+      if (el) el.textContent = c.run ? LZ('暂停', 'Pause') : LZ('开始', 'Start');
+      cardPaint(ci);
+    });
+    for (const rid in TL.rings) ringPaint(rid);
     woPaintClock();
+  }
+  function woToggle() {
+    if (TL.run) { TL.acc = woSecs(); TL.run = false; TL.t0 = null; }
+    else { stopOtherTimers('main'); TL.t0 = Date.now(); TL.run = true; }
+    paintTimers();
   }
   function woReset() {
     TL.acc = 0; TL.run = false; TL.t0 = null;
-    const b = $('[data-woact="toggle"]'); if (b) b.textContent = LZ('开始', 'Start');
-    woPaintClock();
+    paintTimers();
   }
   /* 组间休息圆环 */
   function ringState(rid) {
@@ -1266,7 +1295,7 @@
     TL.rings = {};
     TL.blocks = [{ name: '', sets: [{ kg: '', reps: '', m: '', s: '' }] }];
     TL.cards = [{ title: '', acc: 0, t0: null, run: false }];
-    TL.h = { steps: [{ n: '', m: 0, s: 30 }], idx: 0, done: 0, run: false, t0: null };
+    TL.h = { steps: [{ n: '', m: '', s: '' }], idx: 0, done: 0, run: false, t0: null };
     if (!$('#woRoot')) { const d = document.createElement('div'); d.id = 'woRoot'; document.body.appendChild(d); }
     woRender();
     if (TL.timer) clearInterval(TL.timer);
@@ -1345,12 +1374,13 @@
     });
     r.querySelectorAll('.ring').forEach((el) => {
       el.onclick = () => {
-        const st = ringState(el.dataset.rid);
+        const rid = el.dataset.rid, st = ringState(rid);
         if (st.total <= 0) return toast(LZ('先填组间休息时间', 'Set a rest time first'), '⏱️');
-        if (st.run) { st.done += (Date.now() - st.t0) / 1000; st.run = false; }
-        else if (st.done >= st.total) { st.done = 0; st.t0 = Date.now(); st.run = true; }
-        else { st.t0 = Date.now(); st.run = true; }
-        ringPaint(el.dataset.rid);
+        if (st.run) { st.done += (Date.now() - st.t0) / 1000; st.run = false; st.t0 = null; ringPaint(rid); return; }
+        stopOtherTimers(rid);                       /* 别的计时先停 */
+        if (st.done >= st.total) st.done = 0;
+        st.t0 = Date.now(); st.run = true;
+        paintTimers();
       };
     });
   }
@@ -1520,18 +1550,17 @@
       };
       if (a === 'ctoggle') el.onclick = () => {
         const ci = +el.dataset.ci, c = TL.cards[ci];
-        if (c.run) { c.acc = cardSecs(c); c.run = false; } else { c.t0 = Date.now(); c.run = true; }
-        el.textContent = c.run ? LZ('暂停', 'Pause') : LZ('开始', 'Start');
-        cardPaint(ci);
+        if (c.run) { c.acc = cardSecs(c); c.run = false; c.t0 = null; }
+        else { stopOtherTimers('c' + ci); c.t0 = Date.now(); c.run = true; }
+        paintTimers();
       };
       if (a === 'creset') el.onclick = () => {
         const ci = +el.dataset.ci, c = TL.cards[ci];
         c.acc = 0; c.run = false; c.t0 = null;
-        const b = r.querySelector(`[data-woact="ctoggle"][data-ci="${ci}"]`); if (b) b.textContent = LZ('开始', 'Start');
-        cardPaint(ci);
+        paintTimers();
       };
       if (a === 'cfinish') el.onclick = woFinishCardio;
-      if (a === 'addstep') el.onclick = () => { if (TL.h.steps.length >= 30) return toast(LZ('最多 30 个动作', 'Max 30 steps'), '🔢'); TL.h.steps.push({ n: '', m: 0, s: 30 }); woRender(); };
+      if (a === 'addstep') el.onclick = () => { if (TL.h.steps.length >= 30) return toast(LZ('最多 30 个动作', 'Max 30 steps'), '🔢'); TL.h.steps.push({ n: '', m: '', s: '' }); woRender(); };
       if (a === 'delstep') el.onclick = () => {
         const i = +el.dataset.i, h = TL.h;
         if (h.steps.length <= 1) return;
@@ -1542,14 +1571,17 @@
       if (a === 'htoggle') el.onclick = () => {
         const h = TL.h;
         if (h.idx >= h.steps.length) { h.idx = 0; h.done = 0; h.t0 = null; h.run = false; }
-        if (h.run) { h.done += (Date.now() - h.t0) / 1000; h.run = false; }
-        else { h.t0 = Date.now(); h.run = true; }
+        if (h.run) { h.done += (Date.now() - h.t0) / 1000; h.run = false; h.t0 = null; }
+        else {
+          if (hPlan() <= 0) return toast(LZ('先给动作设置时间再开始', 'Set a step duration first'), '⏱️');
+          h.t0 = Date.now(); h.run = true;
+        }
         hiitPaint();
       };
       if (a === 'hfinish') el.onclick = () => {
         const h = TL.h, secs = Math.floor(hElapsed());
         if (h.idx >= h.steps.length) { woClose(); return; }
-        if (secs <= 0) return toast(LZ('还未运动哦，先点开始吧', "You haven't started yet"), '⏸');
+        if (secs <= 0) return toast(LZ('还没开始训练哦', "You haven't started training yet"), '⏸');
         if (hPlan() <= 0) return toast(LZ('先给动作设置时间', 'Set a duration first'), '⏱');
         saveRec({
           t: 'hiit', title: LZ('HIIT 间歇训练', 'HIIT'), secs,
@@ -1620,7 +1652,7 @@
       if (!title) return toast(LZ('有训练没填名称，填上或删掉它才能记录', 'A cardio block has no name — name it or delete it'), '📝');
       items.push({ name: title, secs });
     }
-    if (!items.length) return toast(LZ('还未运动哦，先点开始吧', "You haven't started yet"), '⏸');
+    if (!items.length) return toast(LZ('还没开始训练哦', "You haven't started training yet"), '⏸');
     const total = items.reduce((t, i) => t + i.secs, 0);
     saveRec({
       t: 'cardio', title: LZ('有氧训练', 'Cardio'), secs: total,
@@ -3896,6 +3928,7 @@
   /* ---------------- 主渲染 ---------------- */
   function render() {
     /* 顶部积分徽章已移除（挡住昵称和 VIP 标识） */
+    lastDay = todayStr();
     const nb = $('#nickBtn');
     if (nb) {
       nb.innerHTML = `<span class="nk-t">${esc(S.nickname || '未命名')}</span>` + (vipOn() ? ' <span class="vip-mini">VIP</span>' : '');
@@ -3959,11 +3992,24 @@
 
   function boot() {
     loadDB();
+    /* 记住上次待的标签页：万一页面被微信/系统回收后重载，也回到原来那页，不会突然变回首页 */
+    try {
+      const lastTab = sessionStorage.getItem('kp_tab');
+      if (lastTab === 'smoke' || lastTab === 'alcohol' || lastTab === 'fit' || lastTab === 'peki') tab = lastTab;
+    } catch (e) {}
+    /* 弹层刚打开/刚关闭的那一下，别让点击穿透到下面的按钮 */
+    const sr = $('#sheetRoot');
+    if (sr) sr.addEventListener('click', (e) => { if (uiBlocked()) { e.stopPropagation(); e.preventDefault(); } }, true);
     $('#pekiIco').innerHTML = QuitArt.pekiAvatar();
     $('#wxLogin').addEventListener('click', openWxAuth);
     const acl = $('#acctLogin');
     if (acl) acl.addEventListener('click', () => openAcctLogin());
-    $$('.tab').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.tab; render(); window.scrollTo(0, 0); }));
+    $$('.tab').forEach((b) => b.addEventListener('click', () => {
+      if (uiBlocked()) return;
+      tab = b.dataset.tab;
+      try { sessionStorage.setItem('kp_tab', tab); } catch (e) {}
+      render(); window.scrollTo(0, 0);
+    }));
     $('#nickBtn').addEventListener('click', openNickEdit);
     /* 佩奇社区进入按钮（三个群各自独立，事件委托） */
     document.addEventListener('click', (e) => {
@@ -4011,17 +4057,21 @@
       if (on) QuitMusic.play(); else QuitMusic.stop();
       toast(on ? '音乐已开启' : '音乐已关闭', '🎵');
     });
-    // 数据持续刷新（每分钟）
+    // 跨天刷新：只在这三种情况下动页面，平时不重建（重建会跳滚动位置、也容易误触）
     setInterval(() => {
       if (!S) return;
       if (tab === 'peki') { updatePekiBtns(); return; }
-      const ae = document.activeElement;
-      if (ae && ae.tagName === 'INPUT') return;
-      if ($('.sheet-mask')) return;
-      const y = window.scrollY;
-      render();
-      window.scrollTo(0, y);
-    }, 10000);
+      if ($('.sheet-mask') || $('#woRoot') || $('#communityOv')) return;
+      if (lastDay !== todayStr()) {
+        lastDay = todayStr();
+        const y = window.scrollY;
+        render();
+        window.scrollTo(0, y);
+        return;
+      }
+      const cb = $('#clockBanner');
+      if (cb) cb.textContent = clockText();
+    }, 30000);
     // 佩奇按钮冷却倒计时
     setInterval(() => { if (S && tab === 'peki' && !$('.sheet-mask')) updatePekiBtns(); }, 1000);
 
