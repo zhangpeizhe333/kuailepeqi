@@ -1,4 +1,4 @@
-/* 戒烟戒酒跟我走 · 主逻辑（单机 · localStorage 存档 · 多微信账号） */
+/* 戒烟戒酒跟我走 · 主逻辑（单机 · localStorage 存档 · 多存档） */
 (function () {
   'use strict';
   const $ = (s) => document.querySelector(s);
@@ -342,7 +342,7 @@
   /* ---------------- 登录 ---------------- */
   function showLogin() { $('#login').classList.remove('hidden'); $('#app').classList.add('hidden'); }
   function openWxAuth() {
-    /* 一键登录只列本机微信存档，账号密码注册的账号不在这里显示（走「账号密码登录」按钮） */
+    /* 一键登录只列本机存档，账号密码注册的账号不在这里显示（走「账号密码登录」按钮） */
     const ids = Object.keys(DB.accounts).filter((id) => !id.startsWith('acct_'));
     const rows = ids.map((id) => {
       const a = DB.accounts[id];
@@ -356,7 +356,7 @@
       </div>`;
     }).join('');
     sheet(`<h3>一键登录</h3>
-      <p class="sheet-sub">「快乐佩奇：戒烟戒酒跟我走」申请获取你的昵称和头像</p>
+      <p class="sheet-sub">每个存档独立记录，换存档就是换一份坚持</p>
       <div class="wx-accounts">${rows || '<p class="muted tiny" style="text-align:center;padding:10px 0">还没有登录记录，新建一个吧</p>'}</div>
       <button class="wx-new" id="wxNew"><span>＋</span>新建一个存档</button>
       <button class="wx-recover" id="wxRecover">🛟 用找回码找回存档</button>
@@ -554,6 +554,68 @@
     savePullAndApply(true);
     setTimeout(() => { toast(`欢迎回来，${S.nickname}！`, '🎉'); enterApp(); }, 150);
   }
+  /* ---------------- Google 一键登录 ---------------- */
+  function initGoogleBtn() {
+    const wrap = $('#googleWrap');
+    if (!wrap) return;
+    const native = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.google);
+    if (!native) { wrap.remove(); return; }
+    wrap.innerHTML = '<button class="btn btn-google btn-lg" id="acctGoogle">' +
+      '<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' +
+      '<span>用 Google 账号继续</span></button>' +
+      '<div class="or-line"><span>或</span></div>';
+    $('#acctGoogle').onclick = googleSignIn;
+  }
+  let googleBusy = false;
+  function googleSignIn() {
+    if (googleBusy) return;
+    googleBusy = true;
+    try { window.webkit.messageHandlers.google.postMessage({ action: 'signIn' }); }
+    catch (e) { googleBusy = false; toast('Google 登录打不开，稍后再试', '⚠️'); }
+  }
+  /* 原生层回调：{ok:true, session:{access_token, refresh_token}} / {ok:false, err} */
+  window.__googleResult = async function (r) {
+    googleBusy = false;
+    if (!r || !r.ok) {
+      if (r && r.err === 'cancel') toast('已取消', 'ℹ️');
+      else toast('Google 登录失败，可以改用账号密码登录', '⚠️');
+      return;
+    }
+    try {
+      const at = r.session.access_token;
+      const u = await fetch(SB_URL + '/auth/v1/user', {
+        headers: { apikey: SB_KEY, Authorization: 'Bearer ' + at },
+      }).then((x) => x.json());
+      const email = (u && u.email) || 'Google';
+      const md = (u && u.user_metadata) || {};
+      const nick = String(md.full_name || md.name || '').slice(0, 12);
+      const res = await sbRpc('pk_login_google', { p_nick: nick || 'Player' }, at);
+      if (res && res.ok) applyGoogleLogin(res, email);
+      else toast('登录没成功，稍后再试', '⚠️');
+    } catch (e) { toast('连不上云端，检查一下网络', '📡'); }
+  };
+  function applyGoogleLogin(r, email) {
+    const key = 'acct_g_' + r.uid;
+    let acc = DB.accounts[key];
+    if (!acc) {
+      acc = fixSave(freshSave());
+      acc.wx = { wxid: key, nick: r.nickname || 'Player' };
+      acc.nickname = r.nickname || 'Player';
+      acc.avatar = r.avatar || '🐷';
+      restoreDays(acc, r);
+    }
+    acc.acct = email || 'Google';
+    acc.g = true;
+    acc.cloud = { uid: r.uid, token: r.token };
+    DB.accounts[key] = acc;
+    DB.current = key;
+    S = acc;
+    localStorage.setItem(DB_KEY, JSON.stringify(DB));
+    closeSheet();
+    savePullAndApply(true);
+    setTimeout(() => { toast('欢迎回来，' + S.nickname + '！', '🎉'); enterApp(); }, 150);
+  }
+
   function acctErrMsg(err, mode) {
     const map = {
       user_taken: '这个账号已经被注册了，换一个吧',
@@ -567,6 +629,7 @@
   function openAcctLogin(prefill) {
     sheet(`<h3>🔑 账号登录</h3>
       <p class="sheet-sub">登录后换手机、换浏览器也能找回打卡记录</p>
+      <div id="googleWrap"></div>
       <div class="seg" id="acctMode">
         <button class="seg-b active" data-m="login">登录</button>
         <button class="seg-b" data-m="reg">注册新账号</button>
@@ -580,7 +643,7 @@
           <input id="acctNick" maxlength="12" placeholder="显示在好友列表里的名字"></div>
         <button class="btn btn-primary btn-lg" id="acctGo" style="margin-top:12px">登录</button>
       </div>
-      <p class="muted tiny" style="text-align:center;margin-top:10px">忘记密码找客服重置 · 账号只用来同步记录</p>`);
+      <p class="muted tiny" style="text-align:center;margin-top:10px">忘记密码无法找回，请记牢 · 账号只用来同步记录</p>`);
     let mode = 'login';
     const go = $('#acctGo');
     $$('#acctMode .seg-b').forEach((b) => b.addEventListener('click', () => {
@@ -607,6 +670,7 @@
       } catch (e) { go.disabled = false; toast('连不上云端，检查一下网络', '📡'); }
     };
     go.onclick = submit;
+    initGoogleBtn();
     $('#acctPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
   }
   function acctChangePass() {
@@ -2770,25 +2834,6 @@
     ta.remove();
     return ok;
   }
-  const APK_URL = 'https://zhangpeizhe333.github.io/kuailepeqi/kuailepeqi.apk';
-  function downloadApk() {
-    const inWx = /MicroMessenger/i.test(navigator.userAgent);
-    if (inWx) {
-      sheet(`<h3>📥 下载安卓 App</h3>
-        <p class="sheet-sub">微信里不能直接下载安装包，需要先换到浏览器</p>
-        <div class="rule-list">
-          <p><b>1.</b> 点右上角「···」</p>
-          <p><b>2.</b> 选择「在浏览器中打开」</p>
-          <p><b>3.</b> 在浏览器菜单里再点「下载安卓 App」就能下载安装啦</p>
-        </div>
-        <button class="btn btn-primary btn-lg" style="margin-top:14px" onclick="document.querySelector('.sheet-mask').remove()">知道啦</button>`);
-      return;
-    }
-    const a = document.createElement('a');
-    a.href = APK_URL; a.download = 'kuailepeqi.apk';
-    document.body.appendChild(a); a.click(); a.remove();
-    toast('安装包开始下载，下完点开安装', '📥');
-  }
 
   /* 分享链接：复制网页链接或安装包链接 */
   function shareSheet() {
@@ -2796,22 +2841,84 @@
       <p class="sheet-sub">选一个复制，粘贴给朋友就行</p>
       <div class="sheet-actions col">
         <button class="btn btn-primary btn-lg" id="shWeb">📋 复制网页链接</button>
-        <button class="btn btn-ghost btn-lg" id="shApk">📋 复制安装包（APK）链接</button>
         <button class="btn btn-ghost btn-lg" id="shCancel">取消</button>
       </div>
-      <p class="muted tiny" style="text-align:center;margin-top:10px">网页链接：点开就能玩 · 安装包链接：安卓用浏览器打开后下载安装</p>`);
+      <p class="muted tiny" style="text-align:center;margin-top:10px">粘贴给好友，点开就能玩</p>`);
     $('#shWeb').onclick = async () => {
       const ok = await copyText(gameUrl());
       closeSheet();
       toast(ok ? '网页链接已复制' : '复制失败，请手动复制', ok ? '🔗' : '⚠️');
     };
-    $('#shApk').onclick = async () => {
-      const ok = await copyText(APK_URL);
-      closeSheet();
-      toast(ok ? '安装包链接已复制' : '复制失败，请手动复制', ok ? '🔗' : '⚠️');
-    };
     $('#shCancel').onclick = closeSheet;
   }
+
+  /* ---------------- 联系我们（邮箱，替代微信客服） ---------------- */
+  const CONTACT_MAIL = 'Zhangpeizhe333@gmail.com';
+  function contactSheet() {
+    sheet(`<h3>✉️ 联系我们</h3>
+      <p class="sheet-sub">有建议、想合作、遇到问题，都可以发邮件给我</p>
+      <div class="wx-card">
+        <span class="wx-card-ico">✉️</span>
+        <div><small>邮箱</small><b>${CONTACT_MAIL}</b></div>
+      </div>
+      <div class="sheet-actions col">
+        <button class="btn btn-primary btn-lg" id="ctCopy">📋 复制邮箱</button>
+        <button class="btn btn-ghost btn-lg" id="ctOk">知道啦</button>
+      </div>`);
+    $('#ctCopy').onclick = async () => {
+      const ok = await copyText(CONTACT_MAIL);
+      toast(ok ? '邮箱已复制' : '复制失败，请手动输入', ok ? '📋' : '⚠️');
+    };
+    $('#ctOk').onclick = closeSheet;
+  }
+
+  /* ---------------- iOS 内购（StoreKit 2） ---------------- */
+  const IAP_SKUS = {
+    vip_month: { days: 30, plan: '30 天' },
+    vip_year: { days: 365, plan: '1 年' },
+    vip_forever: { days: 36500, plan: '永久' },
+  };
+  function iapApply(sku, txId) {
+    const p = IAP_SKUS[sku];
+    if (!p) return;
+    const base = Math.max(Date.now(), (S.vip && S.vip.until) || 0);
+    S.vip = { until: base + p.days * DAY, code: 'iap_' + (txId || sku), plan: p.plan };
+    S.vipFree = { d: '', used: false };
+    persist();
+    render();
+    toast(`开通成功，${p.plan}会员已生效`, '🎉');
+    setTimeout(vipSheet, 500);
+  }
+  function iapBuy(sku) {
+    if (!window.KKIAP || !window.KKIAP.available()) return toast('请在 App Store 版本中购买', 'ℹ️');
+    window.KKIAP.buy(sku);
+  }
+  function iapRestore() {
+    if (!window.KKIAP || !window.KKIAP.available()) return toast('请在 App Store 版本中恢复购买', 'ℹ️');
+    window.KKIAP.restore();
+  }
+  /* 原生层回调：{type:'bought'|'restored'|'cancel'|'empty'|'error', sku, tx, msg} */
+  window.__iapResult = function (r) {
+    if (!r) return;
+    if (r.type === 'bought' || r.type === 'restored') iapApply(r.sku, r.tx);
+    else if (r.type === 'cancel') toast('已取消购买', 'ℹ️');
+    else if (r.type === 'empty') toast('没有可恢复的购买记录', 'ℹ️');
+    else if (r.type === 'error') toast(r.msg || '购买没成功，稍后再试', '⚠️');
+  };
+  /* App Store 本地化价格回填（每个地区的 App Store 自动显示当地货币） */
+  window.__iapPrices = function (map) {
+    if (!map) return;
+    $$('#vipBuy .vip-buy').forEach((b) => {
+      const p = map[b.dataset.sku];
+      if (!p) return;
+      const en = uiIsEn();
+      const unit = b.dataset.sku === 'vip_forever'
+        ? (en ? 'forever' : '永久')
+        : '/' + (b.dataset.sku === 'vip_month' ? (en ? 'mo' : '月') : (en ? 'yr' : '年'));
+      b.innerHTML = '<b>' + esc(p) + '</b><small>' + unit + '</small>';
+    });
+  };
+  if (window.KKIAP && window.KKIAP.available() && window.KKIAP.prices) window.KKIAP.prices();
 
   /* ---------------- 会员 · 激活码 ---------------- */
   const VIP_ALPHA = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -2862,7 +2969,7 @@
           <div><b>${esc(S.vip.plan || '会员')} · 生效中</b>
           <small>有效期至 ${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 · ${leftTxt}</small></div>
         </div>
-        <p class="muted tiny" style="text-align:center;margin:10px 0 0">续费：¥8/月 · ¥88/年 · ¥188/永久，找客服拿激活码</p>
+        <p class="muted tiny" style="text-align:center;margin:10px 0 0">续费方案见下方 · 兑换码由活动发放</p>
         <div class="vip-perk">
           <div><span>📝</span><b>每天免费抽 1 张小纸条</b></div>
           <div><span>📅</span><b>可自行设置打卡开始时间</b></div>
@@ -2872,11 +2979,13 @@
         <div class="sheet-actions col" style="margin-top:14px">
           <button class="btn btn-ghost btn-lg" id="vipStart">📅 设置打卡开始时间</button>
           <button class="btn btn-ghost btn-lg" id="vipMakeup">🖊️ 补签打卡</button>
-          <button class="btn btn-ghost btn-lg" id="vipAdd">再输一个码，续期</button>
+          <button class="btn btn-ghost btn-lg" id="vipAdd">输入兑换码续期</button>
+          <button class="btn btn-ghost btn-lg" id="vipRestore">恢复购买</button>
           <button class="btn btn-primary btn-lg" id="vipOk">知道啦</button>
         </div>`);
       $('#vipOk').onclick = closeSheet;
       $('#vipAdd').onclick = () => vipInputSheet(true);
+      $('#vipRestore').onclick = iapRestore;
       $('#vipStart').onclick = vipStartSheet;
       $('#vipMakeup').onclick = vipMakeupSheet;
       return;
@@ -2886,11 +2995,11 @@
 
   function vipInputSheet(hasCode) {
     sheet(`<h3>🎫 陪伴会员</h3>
-      <p class="sheet-sub">${hasCode ? '再输一个新码可续期叠加（每个码只能用一次）' : '每个激活码只能用一次，输入后立即生效'}</p>
-      <div class="vip-price">
-        <div><b>¥8</b><small>/ 月</small></div>
-        <div><b>¥88</b><small>/ 年</small></div>
-        <div><b>¥188</b><small>/ 永久</small></div>
+      <p class="sheet-sub">${hasCode ? '再输一个新兑换码可续期叠加（每个码只能用一次）' : '每个兑换码只能用一次，兑换后立即生效'}</p>
+      <div class="vip-price" id="vipBuy">
+        <button class="vip-buy" data-sku="vip_month"><b>¥8</b><small>/ 月</small></button>
+        <button class="vip-buy" data-sku="vip_year"><b>¥88</b><small>/ 年</small></button>
+        <button class="vip-buy" data-sku="vip_forever"><b>¥188</b><small>/ 永久</small></button>
       </div>
       <div class="vip-perk">
         <div><span>📝</span><b>每天免费抽 1 张小纸条</b></div>
@@ -2900,10 +3009,11 @@
       </div>
       <input class="vip-input" id="vipCode" placeholder="KP-XXXXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false">
       <div class="sheet-actions col" style="margin-top:12px">
-        <button class="btn btn-primary btn-lg" id="vipAct">激活会员</button>
+        <button class="btn btn-primary btn-lg" id="vipAct">兑换会员</button>
+        <button class="btn btn-ghost btn-lg" id="vipRestore2">恢复购买</button>
         <button class="btn btn-ghost btn-lg" id="vipCancel">${hasCode ? '先不续' : '先看看'}</button>
       </div>
-      <p class="muted tiny" style="text-align:center;margin-top:10px">还没有激活码？去菜单里点「联系客服」找我买</p>`);
+      <p class="muted tiny" style="text-align:center;margin-top:10px">兑换码由活动发放 · 也可以直接点上方方案购买</p>`);
 
     const act = async () => {
       const el = $('#vipCode');
@@ -2950,10 +3060,12 @@
     };
     $('#vipAct').onclick = act;
     $('#vipCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') act(); });
+    $$('#vipBuy .vip-buy').forEach((b) => { b.onclick = () => iapBuy(b.dataset.sku); });
+    $('#vipRestore2').onclick = iapRestore;
     $('#vipCancel').onclick = closeSheet;
   }
 
-  /* ---------------- 自绘日历（网页 / APK 样式统一） ---------------- */
+  /* ---------------- 自绘日历 ---------------- */
   const CAL_W = ['日', '一', '二', '三', '四', '五', '六'];
 
   /* 会员：自行设置打卡开始时间（日历单选） */
@@ -3875,24 +3987,6 @@
     };
   }
 
-  function serviceSheet() {
-    const wxid = 'z849998116';
-    sheet(`<h3>💬 联系客服</h3>
-      <p class="sheet-sub">遇到问题、想提建议，加微信随时找我</p>
-      <div class="wx-card">
-        <span class="wx-card-ico">💬</span>
-        <div><small>客服微信号</small><b>${wxid}</b></div>
-      </div>
-      <div class="sheet-actions col">
-        <button class="btn btn-primary btn-lg" id="svCopy">📋 复制微信号</button>
-        <button class="btn btn-ghost btn-lg" id="svOk">知道啦</button>
-      </div>`);
-    $('#svCopy').onclick = async () => {
-      const ok = await copyText(wxid);
-      toast(ok ? '微信号已复制，去微信搜索添加吧' : '复制失败，请手动记下 ' + wxid, ok ? '📋' : '⚠️');
-    };
-    $('#svOk').onclick = closeSheet;
-  }
 
   async function copyLink() {
     const ok = await copyText(gameUrl());
@@ -4023,19 +4117,16 @@
         <p class="sheet-sub">分享给朋友，或管理当前账号</p>
         <div class="menu-list">
           <button class="menu-row" id="mFriends"><span>👥</span><div><b>游戏好友</b><small>搜昵称加好友，看对方坚持了多久</small></div></button>
-          ${isAndroid ? `<button class="menu-row" id="mApk"><span>📥</span><div><b>下载安卓 App</b><small>安装包下载到手机，装好就是原生应用</small></div></button>` : ''}
           <button class="menu-row" id="mShare"><span>🔗</span><div><b>分享链接</b><small>复制网页链接或安装包链接</small></div></button>
-          <button class="menu-row" id="mVip"><span>🎫</span><div><b>会员中心</b><small>${vipOn() ? '已开通 · 还剩 ' + vipLeftDays() + ' 天' : '输入激活码开通'}</small></div></button>
+          <button class="menu-row" id="mVip"><span>🎫</span><div><b>会员中心</b><small>${vipOn() ? '已开通 · 还剩 ' + vipLeftDays() + ' 天' : '购买或兑换开通'}</small></div></button>
           ${S.acct && !S.g ? `<button class="menu-row" id="mAccount"><span>🔑</span><div><b>我的账号</b><small>${esc(S.acct)} · 换手机可找回记录</small></div></button>` : ''}
           ${S.acct ? '' : `<button class="menu-row" id="mAccount"><span>🔑</span><div><b>账号密码登录</b><small>登录后换手机也能找回打卡记录</small></div></button>`}
           ${new URLSearchParams(location.search).has('sync') ? `<button class="menu-row" id="mSync"><span>☁️</span><div><b>云同步</b><small>同步状态诊断（调试入口）</small></div></button>` : ''}
           ${S.acct ? '' : `<button class="menu-row" id="mRecCode"><span>🛟</span><div><b>存档找回码</b><small>${S.recCode ? esc(S.recCode) : '重装 / 换手机后凭码找回这份记录'}</small></div></button>`}
-          <button class="menu-row" id="mService"><span>💬</span><div><b>联系客服</b><small>加微信，问题随时找我</small></div></button>
+          <button class="menu-row" id="mContact"><span>✉️</span><div><b>联系我们</b><small>Zhangpeizhe333@gmail.com</small></div></button>
           <button class="menu-row" id="mLang"><span>🌐</span><div><b>${EN ? 'Language' : '语言'}</b><small>${EN ? 'English · Chinese' : '中文 · 英文'}</small></div></button>
           <button class="menu-row danger" id="mLogout"><span>🚪</span><div><b>退出登录</b><small>记录会保留，可重新登录</small></div></button>
         </div>`);
-      const ma = $('#mApk');
-      if (ma) ma.onclick = downloadApk;
       $('#mShare').onclick = shareSheet;
       $('#mVip').onclick = vipSheet;
       const mac = $('#mAccount');
@@ -4045,7 +4136,7 @@
       const mrc = $('#mRecCode');
       if (mrc) mrc.onclick = recCodeSheet;
       $('#mFriends').onclick = friendsSheet;
-      $('#mService').onclick = serviceSheet;
+      $('#mContact').onclick = contactSheet;
       const ml = $('#mLang');
       if (ml && window.KKI18N) ml.onclick = () => KKI18N.sheet(sheet, closeSheet);
       $('#mLogout').onclick = logout;
