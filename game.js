@@ -1044,12 +1044,13 @@
         ${statsRow([['BMI', bmi.toFixed(1)], ['身材', bmi > 23.9 ? '偏胖' : bmi < 18.5 ? '偏瘦' : '完美'], ['已坚持', Math.max(0, Math.floor((Date.now() - c.started) / DAY)) + ' 天'], ['开始日期', (() => { const d = new Date(c.started); return (d.getMonth() + 1) + '月' + d.getDate() + '日'; })()]])}
       </div>
       ${communityCard('fit')}
+      ${logCard()}
       ${infoCard('fit', '健身', `
         <div><label>身高（cm）</label><input id="fH" type="number" min="50" max="250" value="${c.h}"></div>
         <div><label>体重（kg）</label><input id="fW" type="number" min="10" max="400" step="0.1" value="${c.w}"></div>
         <div style="flex-basis:100%"><label>个性签名</label><input id="fSign" maxlength="20" value="${esc(S.signature.fit || '')}"></div>`)}
     `;
-    bindScene(); bindTitle(FIT_TITLES, 'fit');
+    bindScene(); bindTitle(FIT_TITLES, 'fit'); bindLog();
     const kidBox = () => $('.scene-kid');
     $$('.act').forEach((b) => b.addEventListener('click', () => {
       const a = b.dataset.act;
@@ -1091,6 +1092,96 @@
       toast(bmi > 23.9 ? '胖成球的小盆友来陪你练！' : bmi < 18.5 ? '瘦成棍的小盆友来陪你吃！' : '完美身材的小伙伴来啦！', '🏃');
       render();
     };
+  }
+
+  /* ---------------- 训练日志（最多 10 个项目：组数 / 每组重量 / 每组次数 / 组间休息） ---------------- */
+  function fitLog() {
+    if (!S.fit.log || typeof S.fit.log !== 'object') S.fit.log = { items: [], hist: {} };
+    if (!Array.isArray(S.fit.log.items)) S.fit.log.items = [];
+    if (!S.fit.log.hist || typeof S.fit.log.hist !== 'object') S.fit.log.hist = {};
+    return S.fit.log;
+  }
+  const logRowCss = 'display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px dashed rgba(128,128,128,.28);font-size:14px;align-items:center';
+  function logCard() {
+    const L = fitLog(), e = L.hist[todayStr()], names = L.items.filter(Boolean);
+    let body;
+    if (e && e.rows && Object.keys(e.rows).length) {
+      body = names.filter((n) => e.rows[n]).map((n) => {
+        const r = e.rows[n];
+        return `<div style="${logRowCss}"><span>${esc(n)}</span><b>${r[0]} 组 × ${r[1]}kg × ${r[2]} 次</b></div>`;
+      }).join('') + `<p class="muted tiny" style="margin:8px 0 0">组间休息 ${e.rest || 0} 秒</p>`;
+    } else {
+      body = `<p class="muted tiny" style="margin:0">今天还没记录${names.length ? '，练完随手记一笔～' : '。先点「项目」添加训练动作～'}</p>`;
+    }
+    return `<div class="card"><h3>🏋️ 训练日志</h3>${body}
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <button class="btn btn-primary" id="logRec">📝 记录今日</button>
+        <button class="btn btn-ghost" id="logItems">⚙️ 项目 ${names.length}/10</button>
+        <button class="btn btn-ghost" id="logHist">📅 历史</button>
+      </div></div>`;
+  }
+  function bindLog() {
+    const a = $('#logRec'); if (a) a.onclick = logSheet;
+    const b = $('#logItems'); if (b) b.onclick = logItemsSheet;
+    const c = $('#logHist'); if (c) c.onclick = logHistSheet;
+  }
+  function logItemsSheet() {
+    const L = fitLog();
+    const inputs = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) =>
+      `<input class="log-it" maxlength="12" placeholder="项目 ${i + 1}（如 深蹲）" style="padding:10px;border-radius:10px" value="${esc(L.items[i] || '')}">`).join('');
+    sheet(`<h3>⚙️ 训练项目（最多 10 个）</h3>
+      <p class="sheet-sub">留空的行不保存；改名字后，旧记录仍按旧名字收在历史里</p>
+      <div style="display:flex;flex-direction:column;gap:8px;margin:12px 0">${inputs}</div>
+      <div class="sheet-actions"><button class="btn btn-ghost" id="liNo">取消</button><button class="btn btn-primary" id="liYes">保存</button></div>`);
+    $('#liNo').onclick = closeSheet;
+    $('#liYes').onclick = () => {
+      L.items = $$('.log-it').map((el) => el.value.trim().slice(0, 12)).filter(Boolean).slice(0, 10);
+      persist(); closeSheet(); toast('项目已保存', '⚙️'); render();
+    };
+  }
+  function logSheet() {
+    const L = fitLog(), names = L.items.filter(Boolean);
+    if (!names.length) { toast('先设置训练项目', '⚙️'); return logItemsSheet(); }
+    const e = L.hist[todayStr()] || { rest: 60, rows: {} };
+    const rows = names.map((n) => {
+      const r = e.rows[n] || ['', '', ''];
+      return `<div style="display:flex;gap:6px;align-items:center">
+        <span style="flex:0 0 76px;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</span>
+        <input class="log-s" type="number" inputmode="numeric" min="0" max="99" placeholder="组" style="flex:1;min-width:0;padding:9px 4px;border-radius:8px;text-align:center" value="${r[0]}">
+        <input class="log-w" type="number" inputmode="decimal" min="0" max="9999" step="0.5" placeholder="kg" style="flex:1;min-width:0;padding:9px 4px;border-radius:8px;text-align:center" value="${r[1]}">
+        <input class="log-r" type="number" inputmode="numeric" min="0" max="999" placeholder="次" style="flex:1;min-width:0;padding:9px 4px;border-radius:8px;text-align:center" value="${r[2]}"></div>`;
+    }).join('');
+    sheet(`<h3>📝 记录今日训练</h3>
+      <p class="sheet-sub">每行填：组数 · 每组重量（kg）· 每组次数；留空的行不保存</p>
+      <div style="display:flex;align-items:center;gap:8px;margin:10px 0">
+        <span class="tiny">组间休息</span>
+        <input id="logRest" type="number" inputmode="numeric" min="0" max="600" style="width:80px;padding:9px 4px;border-radius:8px;text-align:center" value="${e.rest != null ? e.rest : 60}">
+        <span class="tiny">秒</span></div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin:6px 0">${rows}</div>
+      <div class="sheet-actions"><button class="btn btn-ghost" id="lrNo">取消</button><button class="btn btn-primary" id="lrYes">保存</button></div>`);
+    $('#lrNo').onclick = closeSheet;
+    $('#lrYes').onclick = () => {
+      const s = $$('.log-s'), w = $$('.log-w'), r = $$('.log-r'), out = {};
+      names.forEach((n, i) => {
+        const a = parseInt(s[i].value, 10), b = parseFloat(w[i].value), c = parseInt(r[i].value, 10);
+        if (a > 0 || b > 0 || c > 0) out[n] = [a || 0, b || 0, c || 0];
+      });
+      if (!Object.keys(out).length) return toast('至少填一组数据', '📝');
+      L.hist[todayStr()] = { rest: Math.max(0, parseInt($('#logRest').value, 10) || 0), rows: out };
+      persist(); closeSheet(); toast('今日训练已记录', '💪'); render();
+    };
+  }
+  function logHistSheet() {
+    const L = fitLog();
+    const days = Object.keys(L.hist).sort().reverse().slice(0, 14);
+    const list = days.length ? days.map((d) => {
+      const e = L.hist[d];
+      const rows = Object.entries(e.rows || {}).map(([n, r]) => `${esc(n)} ${r[0]}×${r[1]}kg×${r[2]}`).join('，');
+      return `<div style="${logRowCss}"><span style="flex:0 0 84px" class="tiny">${d}</span><b style="font-size:12px;text-align:right">${rows || '—'}</b></div>`;
+    }).join('') : '<p class="muted tiny" style="margin:0">还没有历史记录，记录今日训练后这里会留下脚印～</p>';
+    sheet(`<h3>📅 训练历史（最近 14 天）</h3><div style="display:flex;flex-direction:column;margin:12px 0">${list}</div>
+      <div class="sheet-actions"><button class="btn btn-primary" id="lhOk">好的</button></div>`);
+    $('#lhOk').onclick = closeSheet;
   }
 
   /* ---------------- 佩奇 ---------------- */
