@@ -159,6 +159,8 @@ h3 small { font-weight: 400; }
   background: var(--card2); border: 1px solid var(--line);
   display: grid; place-items: center; -webkit-text-size-adjust: 100%;
 }
+/* 去掉移动端双击缩放带来的 300ms 延迟（延迟期间那一下容易点到别的按钮） */
+button, .btn, .tab, .menu-row, .act { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 .tabbar {
   position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); z-index: 30;
   width: min(1180px, calc(100% - 24px));
