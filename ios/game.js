@@ -692,8 +692,33 @@
       <p class="sheet-sub">当前账号：${esc(S.acct)} · 换手机登录这个账号就能找回记录</p>
       <div class="sheet-actions col">
         <button class="btn btn-primary btn-lg" id="acctPwd">修改密码</button>
-      </div>`);
+        <button class="btn btn-danger" id="acctDel">注销账号并删除全部数据</button>
+      </div>
+      <p class="muted tiny" style="text-align:center;margin-top:10px">注销后账号、打卡记录、帖子、聊天记录全部删除，无法恢复</p>`);
     $('#acctPwd').onclick = acctChangePass;
+    $('#acctDel').onclick = acctDelete;
+  }
+
+  /* 注销账号：先清云端（账号凭据 + 打卡 + 帖子 + 聊天 + 好友），再删本机存档 */
+  function acctDelete() {
+    sheet(`<h3>确定要注销账号吗？</h3>
+      <p class="sheet-sub">「${esc(S.nickname || '玩家')}」的账号、打卡记录、积分、小纸条、花园帖子、聊天记录会被永久删除，好友和社区里都搜不到你。此操作不可恢复。</p>
+      <p class="sheet-sub">如果只是想删掉某条帖子或聊天，可以在对应页面单独删除，不必注销账号。</p>
+      <div class="sheet-actions">
+        <button class="btn btn-ghost" id="acctDelNo">再想想</button>
+        <button class="btn btn-danger" id="acctDelYes">确认注销</button>
+      </div>`);
+    $('#acctDelNo').onclick = accountSheet;
+    $('#acctDelYes').onclick = async () => {
+      const btn = $('#acctDelYes');
+      btn.disabled = true; btn.textContent = '正在删除…';
+      const id = DB.current;
+      try { await purgeCloud(S); } catch (e) {}
+      try { if (id) delete DB.accounts[id]; DB.current = null; persist(); } catch (e) {}
+      closeSheet();
+      toast('账号与全部数据已删除', '🗑️');
+      setTimeout(() => location.reload(), 900);
+    };
   }
 
   function logout() {
