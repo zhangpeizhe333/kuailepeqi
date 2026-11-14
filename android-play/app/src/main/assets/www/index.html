@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>快乐佩奇：戒烟戒酒跟我走</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#171227">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<script>
+/* 安卓离线包：资源在本地 assets 里，没有缓存问题，直接加载 */
+document.write('<link rel="stylesheet" href="style.css">');
+['i18n.js', 'art.js', 'music.js', 'iap.js', 'game.js'].forEach(function (f) {
+  document.write('<script src="' + f + '"><\/script>');
+});
+</script>
+</head>
+<body>
+
+<!-- ============ 登录页 ============ -->
+<div id="login" class="login">
+  <div class="login-scene" aria-hidden="true">
+    <div class="scene-stars"></div>
+    <div class="scene-hills"></div>
+    <div class="scene-house">🏠</div>
+  </div>
+  <div class="login-card">
+    <div class="lang-pick">
+      <button id="langZh" type="button">中文</button>
+      <button id="langEn" type="button">English</button>
+    </div>
+    <div class="logo">
+      <span class="logo-emoji">
+        <svg viewBox="0 0 100 100" width="68" height="68" xmlns="http://www.w3.org/2000/svg">
+          <line x1="21" y1="21" x2="79" y2="79" stroke="#e35d6a" stroke-width="9" stroke-linecap="round"/>
+          <g transform="translate(50 50) scale(0.75)">
+            <g transform="translate(0 102)">
+              <circle cx="-38" cy="-96" r="5.5" fill="#ffe6c8" stroke="#d8b78e" stroke-width="2.4"/>
+              <circle cx="38" cy="-96" r="5.5" fill="#ffe6c8" stroke="#d8b78e" stroke-width="2.4"/>
+              <circle cx="0" cy="-102" r="36" fill="#ffe6c8" stroke="#d8b78e" stroke-width="3"/>
+              <ellipse cx="-14" cy="-102" rx="6" ry="6.8" fill="#3a2c36"/><circle cx="-16" cy="-104.4" r="2.3" fill="#fff"/>
+              <ellipse cx="14" cy="-102" rx="6" ry="6.8" fill="#3a2c36"/><circle cx="12" cy="-104.4" r="2.3" fill="#fff"/>
+              <path d="M-20 -112 Q-14 -116.5 -8 -112" stroke="#3a2c36" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+              <path d="M8 -112 Q14 -116.5 20 -112" stroke="#3a2c36" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+              <ellipse cx="-24" cy="-90" rx="6" ry="3.2" fill="#ffa3b4" opacity=".5"/>
+              <ellipse cx="24" cy="-90" rx="6" ry="3.2" fill="#ffa3b4" opacity=".5"/>
+              <path d="M-7 -84 q7 8 14 0" stroke="#8a4a52" stroke-width="2.6" fill="#e8808f" stroke-linecap="round"/>
+              <path d="M-36.5 -103 A36.5 36.5 0 0 1 36.5 -103 L36.5 -100 Q30 -126 16 -125 Q2 -124 -8 -127 Q-24 -128 -36.5 -100 Z" fill="#332c44" stroke="#241f30" stroke-width="3" stroke-linejoin="round"/>
+              <path d="M-2 -137 q13 -2 15 11 q-8 -8 -17 -4 Z" fill="#332c44" stroke="#241f30" stroke-width="2.4" stroke-linejoin="round"/>
+              <path d="M-35 -105 q-2 8 1 11 M35 -105 q2 8 -1 11" stroke="#332c44" stroke-width="7" fill="none" stroke-linecap="round"/>
+            </g>
+          </g>
+          <circle cx="50" cy="50" r="42" fill="none" stroke="#e35d6a" stroke-width="9"/>
+        </svg>
+      </span>
+      <h1>快乐佩奇</h1>
+      <p class="sub-title">戒烟戒酒跟我走</p>
+      <p class="credit">© 2026 快乐佩奇</p>
+    </div>
+    <p class="login-sub">断崖式戒烟 · 清醒戒酒 · 运动打卡<br>让小朋友陪你一起变健康</p>
+    <button id="wxLogin" class="wx-btn">
+      <span class="wx-ico">💬</span> 一键登录
+    </button>
+    <button id="acctLogin" class="acct-btn">
+      <span>🔑</span> 账号密码登录
+    </button>
+    <p class="muted tiny" style="text-align:center;margin-top:14px">一键登录数据存本机 · 账号登录可跨手机找回</p>
+  </div>
+</div>
+
+<!-- ============ 主界面 ============ -->
+<div id="app" class="hidden">
+  <header class="topbar">
+    <div class="topbar-brand">
+      <span class="brand-ico">
+        <svg viewBox="0 0 100 100" width="22" height="22" xmlns="http://www.w3.org/2000/svg">
+          <line x1="21" y1="21" x2="79" y2="79" stroke="#e35d6a" stroke-width="10" stroke-linecap="round"/>
+          <g transform="translate(50 50) scale(0.75)">
+            <g transform="translate(0 102)">
+              <circle cx="-38" cy="-96" r="5.5" fill="#ffe6c8" stroke="#d8b78e" stroke-width="2.4"/>
+              <circle cx="38" cy="-96" r="5.5" fill="#ffe6c8" stroke="#d8b78e" stroke-width="2.4"/>
+              <circle cx="0" cy="-102" r="36" fill="#ffe6c8" stroke="#d8b78e" stroke-width="3"/>
+              <ellipse cx="-14" cy="-102" rx="6" ry="6.8" fill="#3a2c36"/><circle cx="-16" cy="-104.4" r="2.3" fill="#fff"/>
+              <ellipse cx="14" cy="-102" rx="6" ry="6.8" fill="#3a2c36"/><circle cx="12" cy="-104.4" r="2.3" fill="#fff"/>
+              <path d="M-20 -112 Q-14 -116.5 -8 -112" stroke="#3a2c36" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+              <path d="M8 -112 Q14 -116.5 20 -112" stroke="#3a2c36" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+              <ellipse cx="-24" cy="-90" rx="6" ry="3.2" fill="#ffa3b4" opacity=".5"/>
+              <ellipse cx="24" cy="-90" rx="6" ry="3.2" fill="#ffa3b4" opacity=".5"/>
+              <path d="M-7 -84 q7 8 14 0" stroke="#8a4a52" stroke-width="2.6" fill="#e8808f" stroke-linecap="round"/>
+              <path d="M-36.5 -103 A36.5 36.5 0 0 1 36.5 -103 L36.5 -100 Q30 -126 16 -125 Q2 -124 -8 -127 Q-24 -128 -36.5 -100 Z" fill="#332c44" stroke="#241f30" stroke-width="3" stroke-linejoin="round"/>
+              <path d="M-2 -137 q13 -2 15 11 q-8 -8 -17 -4 Z" fill="#332c44" stroke="#241f30" stroke-width="2.4" stroke-linejoin="round"/>
+              <path d="M-35 -105 q-2 8 1 11 M35 -105 q2 8 -1 11" stroke="#332c44" stroke-width="7" fill="none" stroke-linecap="round"/>
+            </g>
+          </g>
+          <circle cx="50" cy="50" r="42" fill="none" stroke="#e35d6a" stroke-width="10"/>
+        </svg>
+      </span>
+      <span class="tb-wrap">快乐佩奇<small class="brand-credit">戒烟戒酒跟我走</small></span>
+      <button id="nickBtn" class="nick-chip" title="点击修改昵称">玩家</button>
+    </div>
+    <div class="topbar-acts">
+      <button id="dmBell" class="icon-btn" title="私信消息">✉️</button>
+      <button id="musicBtn" class="icon-btn" title="音乐：卡农（可关闭）">🎵</button>
+      <button id="menuBtn" class="icon-btn" title="菜单">☰</button>
+    </div>
+  </header>
+
+  <main id="main"></main>
+
+  <nav class="tabbar">
+    <button class="tab active" data-tab="peki"><span class="tab-ico" id="pekiIco"></span>首页</button>
+    <button class="tab" data-tab="smoke"><span>🚬</span>戒烟</button>
+    <button class="tab" data-tab="alcohol"><span>🍺</span>戒酒</button>
+    <button class="tab" data-tab="fit"><span>🏃</span>运动</button>
+  </nav>
+</div>
+
+<audio id="bgm" src="bgm.mp3" loop preload="auto"></audio>
+<div id="sheetRoot"></div>
+<div id="toastWrap"></div>
+
+
+</body>
+</html>
