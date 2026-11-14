@@ -8,6 +8,28 @@
 
   /* ---------------- 精确词典：整节点文本 → 英文 ---------------- */
   var EXACT = {
+    /* 训练日志 */
+    '训练日志': 'Training Log',
+    '运动训练': 'Train',
+    '运动记录': 'History',
+    '健身训练': 'Strength',
+    '有氧训练': 'Cardio',
+    'HIIT 训练': 'HIIT',
+    '选择训练类型': 'Choose a workout type',
+    '输入项目标题': 'Session title',
+    '新增动作': 'Add exercise',
+    '新增训练': 'Add cardio',
+    '动作名称，如 深蹲': 'Exercise name, e.g. Squat',
+    '训练名称，如 跑步': 'Cardio name, e.g. Run',
+    '新增一组': 'Add set',
+    '开始': 'Start', '暂停': 'Pause', '继续': 'Resume', '重置': 'Reset',
+    '完成训练': 'Finish workout', '返回训练': 'Back to workout',
+    '次': 'Reps', '分': 'min', '秒': 'sec',
+    'HIIT 设置': 'HIIT Setup', '添加动作': 'Add exercise',
+    '还没有记录': 'No records yet',
+    '最近 28 天': 'Last 28 days',
+    '设置': 'Settings',
+
     /* 顶栏 / 登录页 */
     '快乐佩奇': 'Quit Smoke & Drink',
     '戒烟戒酒跟我走': 'Quit Smoke & Drink With Me',
