@@ -7,7 +7,7 @@
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
   const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   const pad2 = (n) => String(n).padStart(2, '0');
-  const startLabel = (ts) => { const d = new Date(ts); return `${d.getMonth() + 1}月${d.getDate()}日<span class="stat-sub">${pad2(d.getHours())}:${pad2(d.getMinutes())}</span>`; };
+  const startLabel = (ts) => { const d = new Date(ts); return `${d.getMonth() + 1}月${d.getDate()}日<span class="stat-sub">${tlPad(d.getHours())}:${tlPad(d.getMinutes())}</span>`; };
   /* 今日已得积分：打卡最多 3 分 + 逗一逗最多 2 分 = 5 分 */
   function todayPoints() {
     const d = todayStr();
@@ -730,6 +730,7 @@
     if (window.QuitMusic && QuitMusic.enabled()) QuitMusic.play();
     /* 静默把昵称和天数同步到云端，好友才搜得到 */
     setTimeout(() => { if (S && S.nickname) sbSync().catch(() => {}); }, 2500);
+    setTimeout(() => { logCloudPull().catch(() => {}); }, 4000);
     /* 同账号三端同步：已有本机存档直接进 App 时，也拉一次云端最新记录 */
     setTimeout(() => { if (S && S.acct) savePullAndApply(true); }, 1200);
     /* 静默生成存档找回码，重装/换机可凭码找回 */
@@ -1138,94 +1139,383 @@
     };
   }
 
-  /* ---------------- 训练日志（最多 10 个项目：组数 / 每组重量 / 每组次数 / 组间休息） ---------------- */
+  /* ---------------- 训练日志 v2：健身/有氧/HIIT + 28天记录 + 云同步 ---------------- */
   function fitLog() {
-    if (!S.fit.log || typeof S.fit.log !== 'object') S.fit.log = { items: [], hist: {} };
-    if (!Array.isArray(S.fit.log.items)) S.fit.log.items = [];
-    if (!S.fit.log.hist || typeof S.fit.log.hist !== 'object') S.fit.log.hist = {};
-    return S.fit.log;
+    if (!S.fit.tlog || typeof S.fit.tlog !== 'object') S.fit.tlog = { hist: [] };
+    if (!Array.isArray(S.fit.tlog.hist)) S.fit.tlog.hist = [];
+    return S.fit.tlog;
   }
-  const logRowCss = 'display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px dashed rgba(128,128,128,.28);font-size:14px;align-items:center';
+  function LZ(zh, en) { return (window.KKI18N && KKI18N.lang() === 'en') ? en : zh; }
+  function tlPad(n) { return String(n).padStart(2, '0'); }
+  function fmtSec(sec) { sec = Math.max(0, Math.floor(sec)); const m = Math.floor(sec / 60), s = sec % 60; return tlPad(m) + ':' + tlPad(s); }
+  function pruneLog() {
+    const L = fitLog(), cutoff = Date.now() - 28 * DAY;
+    L.hist = L.hist.filter((r) => (r.ts || 0) >= cutoff).sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 200);
+  }
+  function saveRec(rec) {
+    rec.id = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+    rec.ts = Date.now(); rec.d = todayStr();
+    const L = fitLog(); L.hist.unshift(rec); pruneLog(); persist(); logCloudPush();
+  }
+  function logCloudPush() {
+    const c = cloudId(); if (!c || !c.uid) return Promise.resolve();
+    return sbRpc('pk_log_set', { p_uid: c.uid, p_token: c.token, p_data: { hist: fitLog().hist } }).catch(() => {});
+  }
+  async function logCloudPull() {
+    const c = cloudId(); if (!c || !c.uid) return;
+    try {
+      const r = await sbRpc('pk_log_get', { p_uid: c.uid, p_token: c.token });
+      const h = r && r.hist;
+      if (!Array.isArray(h) || !h.length) return;
+      const L = fitLog(), map = {};
+      for (const x of L.hist) map[x.id] = x;
+      for (const x of h) if (!map[x.id] || (x.ts || 0) > (map[x.id].ts || 0)) map[x.id] = x;
+      L.hist = Object.values(map).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+      pruneLog(); persist();
+    } catch (e) {}
+  }
+  const LOG_TYPES = { strength: ['💪', '健身训练', 'Strength'], cardio: ['🏃', '有氧训练', 'Cardio'], hiit: ['🔥', 'HIIT', 'HIIT'] };
   function logCard() {
-    const L = fitLog(), e = L.hist[todayStr()], names = L.items.filter(Boolean);
-    let body;
-    if (e && e.rows && Object.keys(e.rows).length) {
-      body = names.filter((n) => e.rows[n]).map((n) => {
-        const r = e.rows[n];
-        return `<div style="${logRowCss}"><span>${esc(n)}</span><b>${r[0]} 组 × ${r[1]}kg × ${r[2]} 次</b></div>`;
-      }).join('') + `<p class="muted tiny" style="margin:8px 0 0">组间休息 ${e.rest || 0} 秒</p>`;
-    } else {
-      body = `<p class="muted tiny" style="margin:0">今天还没记录${names.length ? '，练完随手记一笔～' : '。先点「项目」添加训练动作～'}</p>`;
-    }
-    return `<div class="card"><h3>🏋️ 训练日志</h3>${body}
+    const H = fitLog().hist, t = todayStr();
+    const rows = H.filter((r) => r.d === t).map((r) =>
+      `<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px dashed rgba(128,128,128,.28);font-size:14px;align-items:center"><span>${esc(r.title || '')}</span><b>${esc(r.sum || '')}</b></div>`).join('');
+    return `<div class="card"><h3>🏋️ ${LZ('训练日志', 'Training Log')}</h3>
+      ${rows || `<p class="muted tiny" style="margin:0">${LZ('今天还没训练，点「运动训练」开始吧～', 'No workout yet today — tap Train to start.')}</p>`}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-        <button class="btn btn-primary" id="logRec">📝 记录今日</button>
-        <button class="btn btn-ghost" id="logItems">⚙️ 项目 ${names.length}/10</button>
-        <button class="btn btn-ghost" id="logHist">📅 历史</button>
+        <button class="btn btn-primary" id="logTrain">🏃 ${LZ('运动训练', 'Train')}</button>
+        <button class="btn btn-ghost" id="logRec3">📅 ${LZ('运动记录', 'History')}</button>
       </div></div>`;
   }
   function bindLog() {
-    const a = $('#logRec'); if (a) a.onclick = logSheet;
-    const b = $('#logItems'); if (b) b.onclick = logItemsSheet;
-    const c = $('#logHist'); if (c) c.onclick = logHistSheet;
+    const a = $('#logTrain'); if (a) a.onclick = logTrainSheet;
+    const b = $('#logRec3'); if (b) b.onclick = () => woOpen('hist');
   }
-  function logItemsSheet() {
-    const L = fitLog();
-    const inputs = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) =>
-      `<input class="log-it" maxlength="12" placeholder="项目 ${i + 1}（如 深蹲）" style="padding:10px;border-radius:10px" value="${esc(L.items[i] || '')}">`).join('');
-    sheet(`<h3>⚙️ 训练项目（最多 10 个）</h3>
-      <p class="sheet-sub">留空的行不保存；改名字后，旧记录仍按旧名字收在历史里</p>
-      <div style="display:flex;flex-direction:column;gap:8px;margin:12px 0">${inputs}</div>
-      <div class="sheet-actions"><button class="btn btn-ghost" id="liNo">取消</button><button class="btn btn-primary" id="liYes">保存</button></div>`);
-    $('#liNo').onclick = closeSheet;
-    $('#liYes').onclick = () => {
-      L.items = $$('.log-it').map((el) => el.value.trim().slice(0, 12)).filter(Boolean).slice(0, 10);
-      persist(); closeSheet(); toast('项目已保存', '⚙️'); render();
-    };
+  function logTrainSheet() {
+    const btn = (k) => { const [ico, zh, en] = LOG_TYPES[k]; return `<button class="btn btn-primary btn-lg" style="margin-top:10px" data-wo="${k}">${ico} ${LZ(zh, en)}</button>`; };
+    sheet(`<h3>🏋️ ${LZ('选择训练类型', 'Choose a workout type')}</h3>
+      <div style="display:flex;flex-direction:column;gap:2px;margin-top:8px">${btn('strength')}${btn('cardio')}${btn('hiit')}</div>`);
+    $$('[data-wo]').forEach((b) => { b.onclick = () => woOpen(b.dataset.wo); });
   }
-  function logSheet() {
-    const L = fitLog(), names = L.items.filter(Boolean);
-    if (!names.length) { toast('先设置训练项目', '⚙️'); return logItemsSheet(); }
-    const e = L.hist[todayStr()] || { rest: 60, rows: {} };
-    const rows = names.map((n) => {
-      const r = e.rows[n] || ['', '', ''];
-      return `<div style="display:flex;gap:6px;align-items:center">
-        <span style="flex:0 0 76px;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</span>
-        <input class="log-s" type="number" inputmode="numeric" min="0" max="99" placeholder="组" style="flex:1;min-width:0;padding:9px 4px;border-radius:8px;text-align:center" value="${r[0]}">
-        <input class="log-w" type="number" inputmode="decimal" min="0" max="9999" step="0.5" placeholder="kg" style="flex:1;min-width:0;padding:9px 4px;border-radius:8px;text-align:center" value="${r[1]}">
-        <input class="log-r" type="number" inputmode="numeric" min="0" max="999" placeholder="次" style="flex:1;min-width:0;padding:9px 4px;border-radius:8px;text-align:center" value="${r[2]}"></div>`;
+  /* ----- 训练全屏页 ----- */
+  const TL = { timer: null };
+  function woStyle() {
+    if ($('#woStyle')) return;
+    const st = document.createElement('style'); st.id = 'woStyle';
+    st.textContent = `
+    #woRoot{position:fixed;inset:0;z-index:9998;background:#141126;color:#f2f2f8;overflow-y:auto;-webkit-overflow-scrolling:touch}
+    .wo-top{display:flex;align-items:center;gap:10px;padding:12px 14px;position:sticky;top:0;background:rgba(20,17,38,.97);z-index:5}
+    .wo-back{font-size:24px;background:none;border:none;color:#fff;padding:2px 8px;cursor:pointer}
+    .wo-title{flex:1;min-width:0}
+    .wo-title input{width:100%;padding:9px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.09);color:#fff;font-size:15px;box-sizing:border-box}
+    .wo-add{background:#5b8def;border:none;color:#fff;border-radius:10px;padding:9px 12px;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer}
+    .wo-timer{display:flex;align-items:center;justify-content:center;gap:12px;margin:16px 0 6px;flex-wrap:wrap}
+    .wo-clock{font-size:46px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:1px}
+    .wo-btn{padding:10px 16px;border-radius:12px;border:none;font-size:14px;font-weight:600;cursor:pointer}
+    .wo-btn.go{background:#5b8def;color:#fff}
+    .wo-btn.gh{background:rgba(255,255,255,.14);color:#fff}
+    .wo-btn.fin{background:#3ecf8e;color:#06281a}
+    .wo-hint{text-align:center;color:#8f88b8;font-size:12px;margin:0 14px 8px}
+    .wo-box{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px;margin:10px 14px}
+    .wo-row{display:flex;gap:8px;align-items:center;margin-top:8px}
+    .wo-in{flex:1;min-width:0;padding:9px 4px;border-radius:9px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;text-align:center;font-size:14px;box-sizing:border-box}
+    .wo-in.nm{flex:2;text-align:left;padding:9px 10px}
+    .wo-tag{flex:0 0 52px;font-size:13px;font-weight:700;color:#aeb4ff}
+    .wo-mini{background:rgba(255,255,255,.14);border:none;color:#fff;border-radius:9px;padding:8px 10px;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer}
+    .wo-del{background:none;border:none;color:#ff7d7d;font-size:18px;cursor:pointer;padding:4px}
+    .ring{cursor:pointer;user-select:none;flex:0 0 44px}
+    .ring text{fill:#fff;font-size:11px;font-weight:700}
+    .hist-row{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
+    .hist-date{flex:0 0 74px;font-size:12px;color:#8f88b8}
+    .hist-main{flex:1;min-width:0}
+    .hist-main b{display:block;font-size:14px}
+    .hist-main small{color:#a9a3cc;font-size:12px}
+    .hiit-top{text-align:center;padding:26px 14px 4px}
+    .hiit-round{font-size:16px;color:#aeb4ff;font-weight:700}
+    .hiit-state{font-size:30px;font-weight:800;margin-top:6px}
+    .hiit-big{font-size:min(28vw,170px);font-weight:900;text-align:center;font-variant-numeric:tabular-nums;line-height:1.15}
+    .hiit-total{text-align:center;color:#8f88b8;font-size:13px}
+    .hiit-btns{display:flex;flex-direction:column;gap:12px;padding:24px 22px}
+    .hiit-btns .wo-btn{padding:16px;border-radius:16px;font-size:17px}
+    .hiit-btns .semi{background:rgba(255,255,255,.16);color:#fff}
+    `;
+    document.head.appendChild(st);
+  }
+  function woClockHTML(id) { return `<div class="wo-clock" id="${id}">00:00</div>`; }
+  function woTimerRow(id) {
+    return `<div class="wo-timer">${woClockHTML(id)}
+      <button class="wo-btn go" data-woact="toggle">${LZ('开始', 'Start')}</button>
+      <button class="wo-btn gh" data-woact="reset">${LZ('重置', 'Reset')}</button>
+      <button class="wo-btn fin" data-woact="finish">${LZ('完成训练', 'Finish')}</button></div>`;
+  }
+  function woSecs() { return TL.acc + (TL.run ? (Date.now() - TL.t0) / 1000 : 0); }
+  function woToggle() {
+    if (TL.run) { TL.acc = woSecs(); TL.run = false; }
+    else { TL.t0 = Date.now(); TL.run = true; }
+    const b = $('[data-woact="toggle"]'); if (b) b.textContent = TL.run ? LZ('暂停', 'Pause') : LZ('开始', 'Start');
+  }
+  function woReset() { TL.acc = 0; TL.run = false; TL.t0 = null; const b = $('[data-woact="toggle"]'); if (b) b.textContent = LZ('开始', 'Start'); const c = $('#woClock'); if (c) c.textContent = '00:00'; }
+  function ringHTML(rid) {
+    return `<svg class="ring" viewBox="0 0 48 48" width="44" height="44" data-rid="${rid}">
+      <circle cx="24" cy="24" r="20" fill="#0d0b1a" stroke="#000" stroke-width="4"></circle>
+      <circle class="ring-fg" data-rfg="${rid}" cx="24" cy="24" r="20" fill="none" stroke="#5b8def" stroke-width="5" stroke-linecap="round"
+        stroke-dasharray="125.66" stroke-dashoffset="0" transform="rotate(-90 24 24)"></circle>
+      <text data-rtx="${rid}" x="24" y="27" text-anchor="middle">--:--</text></svg>`;
+  }
+  function ringState(rid) {
+    if (!TL.rings[rid]) TL.rings[rid] = { total: 60, done: 0, t0: null, run: false };
+    return TL.rings[rid];
+  }
+  function ringRemain(r) { return Math.max(0, r.total - (r.done + (r.run ? (Date.now() - r.t0) / 1000 : 0))); }
+  function woOpen(kind) {
+    closeSheet(); woStyle();
+    TL.kind = kind; TL.title = ''; TL.acc = 0; TL.run = false; TL.t0 = null;
+    TL.rings = {}; TL.rid = 0;
+    TL.blocks = [{ name: '', sets: [{ kg: '', reps: '', m: 1, s: 0 }] }];
+    TL.cards = [{ title: '', acc: 0, t0: null, run: false }];
+    TL.h = { steps: [{ n: '', m: 0, s: 30 }], idx: 0, done: 0, run: false, t0: null, view: 'run' };
+    TL.arm = null;
+    if (!$('#woRoot')) { const d = document.createElement('div'); d.id = 'woRoot'; document.body.appendChild(d); }
+    woRender();
+    if (TL.timer) clearInterval(TL.timer);
+    TL.timer = setInterval(woTick, 500);
+  }
+  function woClose() { if (TL.timer) { clearInterval(TL.timer); TL.timer = null; } const d = $('#woRoot'); if (d) d.remove(); render(); }
+  function woTop(title, addBtn) {
+    return `<div class="wo-top"><button class="wo-back" data-woact="back">←</button>
+      <div class="wo-title"><input id="woTitle" maxlength="20" placeholder="${LZ('输入项目标题', 'Session title')}" value="${esc(TL.title)}"></div>
+      ${addBtn || ''}</div>`;
+  }
+  function woRender() {
+    const r = $('#woRoot'); if (!r) return;
+    if (TL.kind === 'hist') return woRenderHist(r);
+    if (TL.kind === 'cardio') return woRenderCardio(r);
+    if (TL.kind === 'hiit') return TL.h.view === 'set' ? woRenderHiitSet(r) : woRenderHiit(r);
+    return woRenderStrength(r);
+  }
+  /* ----- 健身训练 ----- */
+  function woRenderStrength(r) {
+    const boxes = TL.blocks.map((b, bi) => {
+      const sets = b.sets.map((s, si) => {
+        const rid = 'r' + bi + '_' + si;
+        if (!TL.rings[rid]) TL.rings[rid] = { total: (parseInt(s.m, 10) || 0) * 60 + (parseInt(s.s, 10) || 0), done: 0, t0: null, run: false };
+        return `<div class="wo-row"><span class="wo-tag">${LZ('第 ' + (si + 1) + ' 组', 'Set ' + (si + 1))}</span>
+          <input class="wo-in" data-bk="${bi}" data-set="${si}" data-f="kg" inputmode="decimal" placeholder="kg" value="${esc(s.kg)}">
+          <input class="wo-in" data-bk="${bi}" data-set="${si}" data-f="reps" inputmode="numeric" placeholder="${LZ('次', 'Reps')}" value="${esc(s.reps)}">
+          <input class="wo-in" data-bk="${bi}" data-set="${si}" data-f="m" inputmode="numeric" placeholder="${LZ('分', 'min')}" style="flex:.6" value="${esc(s.m)}">
+          <input class="wo-in" data-bk="${bi}" data-set="${si}" data-f="s" inputmode="numeric" placeholder="${LZ('秒', 'sec')}" style="flex:.6" value="${esc(s.s)}">
+          ${ringHTML(rid)}</div>`;
+      }).join('');
+      return `<div class="wo-box">
+        <div class="wo-row" style="margin-top:0">
+          <input class="wo-in nm" data-bk="${bi}" data-f="name" maxlength="16" placeholder="${LZ('动作名称，如 深蹲', 'Exercise name, e.g. Squat')}" value="${esc(b.name)}">
+          <button class="wo-mini" data-woact="addset" data-bk="${bi}">＋ ${LZ('新增一组', 'Add set')}</button>
+          <button class="wo-del" data-woact="delbox" data-bk="${bi}">🗑</button></div>
+        ${sets}</div>`;
     }).join('');
-    sheet(`<h3>📝 记录今日训练</h3>
-      <p class="sheet-sub">每行填：组数 · 每组重量（kg）· 每组次数；留空的行不保存</p>
-      <div style="display:flex;align-items:center;gap:8px;margin:10px 0">
-        <span class="tiny">组间休息</span>
-        <input id="logRest" type="number" inputmode="numeric" min="0" max="600" style="width:80px;padding:9px 4px;border-radius:8px;text-align:center" value="${e.rest != null ? e.rest : 60}">
-        <span class="tiny">秒</span></div>
-      <div style="display:flex;flex-direction:column;gap:8px;margin:6px 0">${rows}</div>
-      <div class="sheet-actions"><button class="btn btn-ghost" id="lrNo">取消</button><button class="btn btn-primary" id="lrYes">保存</button></div>`);
-    $('#lrNo').onclick = closeSheet;
-    $('#lrYes').onclick = () => {
-      const s = $$('.log-s'), w = $$('.log-w'), r = $$('.log-r'), out = {};
-      names.forEach((n, i) => {
-        const a = parseInt(s[i].value, 10), b = parseFloat(w[i].value), c = parseInt(r[i].value, 10);
-        if (a > 0 || b > 0 || c > 0) out[n] = [a || 0, b || 0, c || 0];
-      });
-      if (!Object.keys(out).length) return toast('至少填一组数据', '📝');
-      L.hist[todayStr()] = { rest: Math.max(0, parseInt($('#logRest').value, 10) || 0), rows: out };
-      persist(); closeSheet(); toast('今日训练已记录', '💪'); render();
-    };
+    r.innerHTML = woTop('', `<button class="wo-add" data-woact="addbox">＋ ${LZ('新增动作', 'Add exercise')}</button>`)
+      + woTimerRow('woClock')
+      + `<p class="wo-hint">${LZ('kg · 次数 · 组间休息（分/秒），点圆圈开始倒计时', 'kg · reps · rest (min/sec). Tap the circle to start the countdown.')}</p>`
+      + boxes;
+    woBind(r);
+    r.querySelector('#woTitle').oninput = (e) => { TL.title = e.target.value; };
+    r.querySelectorAll('[data-f]').forEach((el) => {
+      el.oninput = () => {
+        const bi = el.dataset.bk, f = el.dataset.f;
+        if (f === 'name') TL.blocks[bi].name = el.value;
+        else {
+          TL.blocks[bi].sets[el.dataset.set][f] = el.value;
+          if (f === 'm' || f === 's') {
+            const st = TL.rings['r' + bi + '_' + el.dataset.set];
+            if (st && !st.run && !st.done) {
+              st.total = (parseInt(TL.blocks[bi].sets[el.dataset.set].m, 10) || 0) * 60 + (parseInt(TL.blocks[bi].sets[el.dataset.set].s, 10) || 0);
+              const tx = r.querySelector(`[data-rtx="r${bi}_${el.dataset.set}"]`);
+              if (tx) tx.textContent = st.total > 0 ? fmtSec(st.total) : '--:--';
+            }
+          }
+        }
+      };
+    });
+    r.querySelectorAll('.ring').forEach((el) => {
+      el.onclick = () => {
+        const st = ringState(el.dataset.rid);
+        if (st.total <= 0) return toast(LZ('先填组间休息时间', 'Set a rest time first'), '⏱️');
+        if (st.run) { st.done += (Date.now() - st.t0) / 1000; st.run = false; }
+        else if (st.done < st.total) { st.t0 = Date.now(); st.run = true; }
+        else { st.done = 0; st.t0 = Date.now(); st.run = true; }
+      };
+    });
   }
-  function logHistSheet() {
-    const L = fitLog();
-    const days = Object.keys(L.hist).sort().reverse().slice(0, 14);
-    const list = days.length ? days.map((d) => {
-      const e = L.hist[d];
-      const rows = Object.entries(e.rows || {}).map(([n, r]) => `${esc(n)} ${r[0]}×${r[1]}kg×${r[2]}`).join('，');
-      return `<div style="${logRowCss}"><span style="flex:0 0 84px" class="tiny">${d}</span><b style="font-size:12px;text-align:right">${rows || '—'}</b></div>`;
-    }).join('') : '<p class="muted tiny" style="margin:0">还没有历史记录，记录今日训练后这里会留下脚印～</p>';
-    sheet(`<h3>📅 训练历史（最近 14 天）</h3><div style="display:flex;flex-direction:column;margin:12px 0">${list}</div>
-      <div class="sheet-actions"><button class="btn btn-primary" id="lhOk">好的</button></div>`);
-    $('#lhOk').onclick = closeSheet;
+  /* ----- 有氧训练 ----- */
+  function woRenderCardio(r) {
+    const blocks = TL.cards.map((c, ci) => {
+      if (c.acc == null) c.acc = 0;
+      return `<div class="wo-box">
+        <div class="wo-row" style="margin-top:0">
+          <input class="wo-in nm" data-cd="${ci}" data-f="title" maxlength="16" placeholder="${LZ('训练名称，如 跑步', 'Cardio name, e.g. Run')}" value="${esc(c.title)}">
+          <button class="wo-del" data-woact="delcard" data-ci="${ci}">🗑</button></div>
+        <div class="wo-timer"><div class="wo-clock" data-cdclk="${ci}">00:00</div>
+          <button class="wo-btn go" data-woact="ctoggle" data-ci="${ci}">${c.run ? LZ('暂停', 'Pause') : LZ('开始', 'Start')}</button>
+          <button class="wo-btn gh" data-woact="creset" data-ci="${ci}">${LZ('重置', 'Reset')}</button></div></div>`;
+    }).join('');
+    r.innerHTML = woTop('', `<button class="wo-add" data-woact="addcard">＋ ${LZ('新增训练', 'Add cardio')}</button>`)
+      + `<p class="wo-hint">${LZ('每块训练单独计时，完成后一起保存', 'Each block has its own timer; save them all when done.')}</p>`
+      + blocks
+      + `<div style="text-align:center;margin:16px 0 30px"><button class="wo-btn fin" data-woact="cfinish" style="padding:14px 34px">${LZ('完成训练', 'Finish')}</button></div>`;
+    woBind(r);
+    r.querySelector('#woTitle').oninput = (e) => { TL.title = e.target.value; };
+    r.querySelectorAll('[data-cd][data-f]').forEach((el) => { el.oninput = () => { TL.cards[el.dataset.cd].title = el.value; }; });
+  }
+  function cardSecs(c) { return c.acc + (c.run ? (Date.now() - c.t0) / 1000 : 0); }
+  /* ----- HIIT ----- */
+  function hStepSecs(st) { return (parseInt(st.m, 10) || 0) * 60 + (parseInt(st.s, 10) || 0); }
+  function hRemain() {
+    const h = TL.h, st = h.steps[h.idx];
+    const total = st ? hStepSecs(st) : 0;
+    return Math.max(0, total - (h.done + (h.run ? (Date.now() - h.t0) / 1000 : 0)));
+  }
+  function hElapsed() {
+    const h = TL.h;
+    let t = 0;
+    for (let i = 0; i < h.steps.length; i++) { if (i < h.idx) t += hStepSecs(h.steps[i]); }
+    return t + (h.idx < h.steps.length ? hStepSecs(h.steps[h.idx]) - hRemain() : 0);
+  }
+  function woRenderHiit(r) {
+    const h = TL.h, n = h.steps.length, i = Math.min(h.idx + 1, n), st = h.steps[h.idx];
+    const finished = h.idx >= n;
+    r.innerHTML = `<div class="wo-top" style="justify-content:space-between">
+        <button class="wo-back" data-woact="back">←</button>
+        <button class="wo-mini" data-woact="hiset">⚙️ ${LZ('设置', 'Settings')}</button>
+        <button class="wo-btn fin" data-woact="hfinish">${LZ('完成训练', 'Finish')}</button></div>
+      <div class="hiit-top"><div class="hiit-round">${LZ('第 ' + i + ' / ' + n + ' 轮', 'Round ' + i + ' / ' + n)}</div>
+        <div class="hiit-state">${finished ? LZ('训练完成', 'Done!') : esc((st && st.n) || LZ('全力冲刺', 'ALL OUT'))}</div></div>
+      <div class="hiit-big" id="hiitBig">${finished ? '00:00' : fmtSec(hRemain())}</div>
+      <div class="hiit-total">${LZ('总时长', 'Total')} <b id="hiitTotal">${fmtSec(hElapsed())}</b></div>
+      <div class="hiit-btns">
+        <button class="wo-btn semi" data-woact="htoggle">${h.run ? LZ('暂停', 'Pause') : (h.idx > 0 || h.done > 0 ? LZ('继续', 'Resume') : LZ('开始', 'Start'))}</button>
+      </div>`;
+    woBind(r);
+  }
+  function woRenderHiitSet(r) {
+    const h = TL.h;
+    const rows = h.steps.map((st, i) => `<div class="wo-row" style="margin-top:8px">
+      <input class="wo-in nm" data-hs="${i}" data-f="n" maxlength="12" placeholder="${LZ('动作名称', 'Exercise')}" value="${esc(st.n)}">
+      <input class="wo-in" data-hs="${i}" data-f="m" inputmode="numeric" placeholder="${LZ('分', 'min')}" style="flex:.55" value="${esc(st.m)}">
+      <input class="wo-in" data-hs="${i}" data-f="s" inputmode="numeric" placeholder="${LZ('秒', 'sec')}" style="flex:.55" value="${esc(st.s)}">
+      <button class="wo-del" data-woact="delstep" data-i="${i}">🗑</button></div>`).join('');
+    r.innerHTML = `<div class="wo-top"><button class="wo-back" data-woact="hback">←</button>
+        <div class="wo-title" style="text-align:center;font-weight:700">${LZ('HIIT 设置', 'HIIT Setup')}</div>
+        <button class="wo-add" data-woact="addstep">＋ ${LZ('添加动作', 'Add exercise')}</button></div>
+      <p class="wo-hint">${LZ('按顺序排列动作和时长，从上到下依次进行', 'Steps run in order, top to bottom.')}</p>${rows}
+      <div style="text-align:center;margin:16px 0"><button class="wo-btn go" data-woact="hback" style="padding:12px 30px">${LZ('返回训练', 'Back')}</button></div>`;
+    woBind(r);
+    r.querySelectorAll('[data-hs]').forEach((el) => {
+      el.oninput = () => { TL.h.steps[el.dataset.hs][el.dataset.f] = el.value; };
+    });
+  }
+  /* ----- 运动记录（28 天） ----- */
+  function woRenderHist(r) {
+    const H = fitLog().hist.slice();
+    const rows = H.length ? H.map((rec) => {
+      const [ico, zh, en] = LOG_TYPES[rec.t] || ['📝', '训练', 'Workout'];
+      const armed = TL.arm === rec.id;
+      return `<div class="hist-row"><span class="hist-date">${esc(rec.d)}</span>
+        <div class="hist-main"><b>${ico} ${esc(rec.title || LZ(zh, en))}</b><small>${esc(rec.sum || '')}</small></div>
+        <button class="wo-del" data-woact="delrec" data-id="${rec.id}">${armed ? '❗' : '🗑'}</button></div>`;
+    }).join('') : `<p class="wo-hint" style="margin-top:30px">${LZ('最近 28 天还没有记录', 'No records in the last 28 days.')}</p>`;
+    r.innerHTML = `<div class="wo-top"><button class="wo-back" data-woact="back">←</button>
+      <div class="wo-title" style="text-align:center;font-weight:700">${LZ('运动记录 · 最近 28 天', 'History · Last 28 Days')}</div></div>${rows}`;
+    woBind(r);
+  }
+  function woBind(r) {
+    const back = r.querySelector('[data-woact="back"]'); if (back) back.onclick = woClose;
+    r.querySelectorAll('[data-woact]').forEach((el) => {
+      const a = el.dataset.woact;
+      if (a === 'toggle') el.onclick = woToggle;
+      if (a === 'reset') el.onclick = woReset;
+      if (a === 'finish') el.onclick = woFinish;
+      if (a === 'addbox') el.onclick = () => { TL.blocks.push({ name: '', sets: [{ kg: '', reps: '', m: 1, s: 0 }] }); woRender(); };
+      if (a === 'delbox') el.onclick = () => { TL.blocks.splice(+el.dataset.bk, 1); if (!TL.blocks.length) TL.blocks.push({ name: '', sets: [{ kg: '', reps: '', m: 1, s: 0 }] }); TL.rings = {}; woRender(); };
+      if (a === 'addset') el.onclick = () => { const b = TL.blocks[+el.dataset.bk]; if (b.sets.length >= 20) return toast(LZ('最多 20 组', 'Max 20 sets'), '🔢'); b.sets.push({ kg: '', reps: '', m: b.sets[b.sets.length - 1].m, s: b.sets[b.sets.length - 1].s }); woRender(); };
+      if (a === 'addcard') el.onclick = () => { TL.cards.push({ title: '', acc: 0, t0: null, run: false }); woRender(); };
+      if (a === 'delcard') el.onclick = () => { TL.cards.splice(+el.dataset.ci, 1); if (!TL.cards.length) TL.cards.push({ title: '', acc: 0, t0: null, run: false }); woRender(); };
+      if (a === 'ctoggle') el.onclick = () => { const c = TL.cards[+el.dataset.ci]; if (c.run) { c.acc = cardSecs(c); c.run = false; } else { c.t0 = Date.now(); c.run = true; } woRender(); };
+      if (a === 'creset') el.onclick = () => { const c = TL.cards[+el.dataset.ci]; c.acc = 0; c.run = false; c.t0 = null; woRender(); };
+      if (a === 'cfinish') el.onclick = () => {
+        let saved = 0;
+        for (const c of TL.cards) {
+          const secs = Math.floor(cardSecs(c));
+          if (!c.title.trim() && secs <= 0) continue;
+          saveRec({ t: 'cardio', title: c.title.trim() || LZ('有氧训练', 'Cardio'), sum: fmtSec(secs), secs }); saved++;
+        }
+        if (!saved) return toast(LZ('还没有可保存的训练', 'Nothing to save yet'), '📝');
+        woClose(); toast(LZ('训练已保存', 'Workout saved'), '💪');
+      };
+      if (a === 'hiset') el.onclick = () => { TL.h.view = 'set'; woRender(); };
+      if (a === 'hback') el.onclick = () => { TL.h.view = 'run'; TL.h.idx = 0; TL.h.done = 0; TL.h.run = false; woRender(); };
+      if (a === 'addstep') el.onclick = () => { TL.h.steps.push({ n: '', m: 0, s: 30 }); woRender(); };
+      if (a === 'delstep') el.onclick = () => { TL.h.steps.splice(+el.dataset.i, 1); if (!TL.h.steps.length) TL.h.steps.push({ n: '', m: 0, s: 30 }); woRender(); };
+      if (a === 'htoggle') el.onclick = () => {
+        const h = TL.h;
+        if (h.idx >= h.steps.length) { h.idx = 0; h.done = 0; }
+        if (h.run) { h.done += (Date.now() - h.t0) / 1000; h.run = false; }
+        else { h.t0 = Date.now(); h.run = true; }
+        woRender();
+      };
+      if (a === 'hfinish') el.onclick = () => {
+        const h = TL.h, secs = Math.floor(hElapsed());
+        if (h.idx >= h.steps.length) { woClose(); return; }   /* 跑完时已自动保存 */
+        if (secs <= 0) return toast(LZ('先在设置里添加动作，再开始训练', 'Add steps in Settings first'), '📝');
+        saveRec({ t: 'hiit', title: LZ('HIIT 间歇训练', 'HIIT'), sum: `${Math.min(h.idx + 1, h.steps.length)}/${h.steps.length} ${LZ('轮', 'rounds')} · ${fmtSec(secs)}`, secs });
+        woClose(); toast(LZ('训练已保存', 'Workout saved'), '🔥');
+      };
+      if (a === 'delrec') el.onclick = () => {
+        if (TL.arm === el.dataset.id) {
+          const L = fitLog(); L.hist = L.hist.filter((x) => x.id !== el.dataset.id);
+          TL.arm = null; pruneLog(); persist(); logCloudPush(); woRender(); toast(LZ('已删除', 'Deleted'), '🗑');
+        } else { TL.arm = el.dataset.id; woRender(); setTimeout(() => { if (TL.arm === el.dataset.id) { TL.arm = null; const rr = $('#woRoot'); if (rr && TL.kind === 'hist') woRender(rr); } }, 2500); }
+      };
+    });
+  }
+  function woFinish() {
+    const blocks = TL.blocks.filter((b) => b.name.trim() && b.sets.some((s) => String(s.kg).trim() !== '' || String(s.reps).trim() !== ''));
+    if (!blocks.length) return toast(LZ('先填动作名称和组数据', 'Fill exercise names first'), '📝');
+    const secs = Math.floor(woSecs());
+    saveRec({
+      t: 'strength', title: TL.title.trim() || LZ('健身训练', 'Strength'),
+      sum: blocks.length + LZ(' 个动作 · ', ' exercises · ') + fmtSec(secs), secs,
+    });
+    woClose(); toast(LZ('训练已保存', 'Workout saved'), '💪');
+  }
+  function woTick() {
+    if (TL.kind === 'strength') {
+      const c = $('#woClock'); if (c && (TL.run || TL.acc)) c.textContent = fmtSec(woSecs());
+      for (const rid in TL.rings) {
+        const st = TL.rings[rid], tx = $(`[data-rtx="${rid}"]`), fg = $(`[data-rfg="${rid}"]`);
+        if (!tx || !fg) continue;
+        const rem = ringRemain(st);
+        tx.textContent = fmtSec(Math.ceil(rem));
+        fg.setAttribute('stroke-dashoffset', String(125.66 * (st.total > 0 ? 1 - rem / st.total : 0)));
+        if (st.run && rem <= 0) { st.run = false; st.done = st.total; }
+      }
+    } else if (TL.kind === 'cardio') {
+      TL.cards.forEach((c, ci) => {
+        const el = $(`[data-cdclk="${ci}"]`);
+        if (el && (c.run || c.acc)) el.textContent = fmtSec(cardSecs(c));
+      });
+    } else if (TL.kind === 'hiit') {
+      const h = TL.h;
+      if (h.run && h.idx < h.steps.length) {
+        if (hRemain() <= 0) { h.done = 0; h.idx++; if (h.idx >= h.steps.length) { h.run = false; saveHiitAuto(); } }
+        woRender();
+      } else {
+        const big = $('#hiitBig'); if (big) big.textContent = fmtSec(hRemain());
+        const tot = $('#hiitTotal'); if (tot) tot.textContent = fmtSec(hElapsed());
+      }
+    }
+  }
+  function saveHiitAuto() {
+    const h = TL.h, secs = Math.floor(hElapsed());
+    if (secs > 0) saveRec({ t: 'hiit', title: LZ('HIIT 间歇训练', 'HIIT'), sum: `${h.steps.length}/${h.steps.length} ${LZ('轮', 'rounds')} · ${fmtSec(secs)}`, secs });
   }
 
   /* ---------------- 佩奇 ---------------- */
@@ -2511,6 +2801,7 @@
       try {
         /* 一码一用：先在云端核销（用过就失效），成功才开通 */
         await sbSync().catch(() => {});
+        logCloudPull().catch(() => {});
         const c = cloudId();
         const res = await sbRpc('pk_code_redeem', { p_uid: c.uid, p_token: c.token, p_code: norm });
         if (res && res.ok) {
@@ -2563,7 +2854,7 @@
     const st = startCal;
     const m = S[st.mod];
     const d = m.cfg.started ? new Date(m.cfg.started) : null;
-    const cur = d ? `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` : '';
+    const cur = d ? `${d.getFullYear()}-${tlPad(d.getMonth() + 1)}-${tlPad(d.getDate())}` : '';
     sheet(`<h3>📅 打卡开始时间</h3>
       <p class="sheet-sub">选哪天，就从哪天开始算天数（网页、手机版式一致）</p>
       <div class="cal-tabs">${rows.map(([k, nm]) => `<button class="cal-tab ${k === st.mod ? 'on' : ''}" data-ct="${k}">${nm}</button>`).join('')}</div>
@@ -2667,7 +2958,7 @@
     let cells = CAL_W.map((w) => `<i class="cal-cell cal-w">${w}</i>`).join('');
     for (let i = 0; i < firstW; i++) cells += '<i class="cal-cell empty"></i>';
     for (let d = 1; d <= dim; d++) {
-      const ds = `${y}-${pad2(mo + 1)}-${pad2(d)}`;
+      const ds = `${y}-${tlPad(mo + 1)}-${tlPad(d)}`;
       const t = new Date(y, mo, d).getTime();
       let cls = 'cal-cell';
       if (doneSet.has(ds)) cls += ' done';
