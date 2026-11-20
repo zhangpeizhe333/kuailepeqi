@@ -554,45 +554,66 @@
     savePullAndApply(true);
     setTimeout(() => { toast(`欢迎回来，${S.nickname}！`, '🎉'); enterApp(); }, 150);
   }
-  /* ---------------- Google 一键登录 ---------------- */
+  /* ---------------- Google 一键登录（iOS / Android 通用） ---------------- */
+  function googleBridge() {
+    if (window.NativeGoogle && window.NativeGoogle.available && window.NativeGoogle.available()) return 'android';
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.google) return 'ios';
+    return null;
+  }
   function initGoogleBtn() {
     const wrap = $('#googleWrap');
     if (!wrap) return;
-    const native = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.google);
-    if (!native) { wrap.remove(); return; }
+    if (!googleBridge()) { wrap.remove(); return; }
     wrap.innerHTML = '<button class="btn btn-google btn-lg" id="acctGoogle">' +
       '<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' +
-      '<span>用 Google 账号继续</span></button>' +
-      '<div class="or-line"><span>或</span></div>';
+      '<span>' + LZ('用 Google 账号继续', 'Continue with Google') + '</span></button>' +
+      '<div class="or-line"><span>' + LZ('或', 'or') + '</span></div>';
     $('#acctGoogle').onclick = googleSignIn;
   }
   let googleBusy = false;
   function googleSignIn() {
-    if (googleBusy) return;
+    if (googleBusy || !googleBridge()) return;
     googleBusy = true;
-    try { window.webkit.messageHandlers.google.postMessage({ action: 'signIn' }); }
-    catch (e) { googleBusy = false; toast('Google 登录打不开，稍后再试', '⚠️'); }
+    try {
+      if (window.NativeGoogle) window.NativeGoogle.signIn();
+      else window.webkit.messageHandlers.google.postMessage({ action: 'signIn' });
+    } catch (e) { googleBusy = false; toast(LZ('Google 登录打不开，稍后再试', "Can't open Google Sign-In, try again later"), '⚠️'); }
   }
-  /* 原生层回调：{ok:true, session:{access_token, refresh_token}} / {ok:false, err} */
+  /* 原生层回调：iOS {ok:true, session:{access_token,...}}；Android {ok:true, idToken, email, name}；失败 {ok:false, err} */
   window.__googleResult = async function (r) {
     googleBusy = false;
     if (!r || !r.ok) {
-      if (r && r.err === 'cancel') toast('已取消', 'ℹ️');
-      else toast('Google 登录失败，可以改用账号密码登录', '⚠️');
+      if (r && r.err === 'cancel') toast(LZ('已取消', 'Cancelled'), 'ℹ️');
+      else if (r && r.err === 'noconfig') toast(LZ('Google 登录还没配置好', 'Google Sign-In is not configured yet'), '⚠️');
+      else toast(LZ('Google 登录失败，可以改用账号密码登录', 'Google Sign-In failed. Try email and password instead.'), '⚠️');
       return;
     }
     try {
-      const at = r.session.access_token;
-      const u = await fetch(SB_URL + '/auth/v1/user', {
-        headers: { apikey: SB_KEY, Authorization: 'Bearer ' + at },
-      }).then((x) => x.json());
-      const email = (u && u.email) || 'Google';
-      const md = (u && u.user_metadata) || {};
-      const nick = String(md.full_name || md.name || '').slice(0, 12);
+      let at = '', email = 'Google', nick = '';
+      if (r.session && r.session.access_token) {
+        at = r.session.access_token;
+        const u = await fetch(SB_URL + '/auth/v1/user', {
+          headers: { apikey: SB_KEY, Authorization: 'Bearer ' + at },
+        }).then((x) => x.json());
+        email = (u && u.email) || 'Google';
+        const md = (u && u.user_metadata) || {};
+        nick = String(md.full_name || md.name || '').slice(0, 12);
+      } else if (r.idToken) {
+        const ex = await fetch(SB_URL + '/auth/v1/token?grant_type=id_token', {
+          method: 'POST',
+          headers: { apikey: SB_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: 'google', id_token: r.idToken }),
+        }).then((x) => x.json());
+        if (!ex || !ex.access_token) { toast(LZ('Google 登录失败，可以改用账号密码登录', 'Google Sign-In failed. Try email and password instead.'), '⚠️'); return; }
+        at = ex.access_token;
+        email = (ex.user && ex.user.email) || r.email || 'Google';
+        const md2 = (ex.user && ex.user.user_metadata) || {};
+        nick = String(md2.full_name || md2.name || r.name || '').slice(0, 12);
+      } else { toast(LZ('Google 登录失败，可以改用账号密码登录', 'Google Sign-In failed. Try email and password instead.'), '⚠️'); return; }
       const res = await sbRpc('pk_login_google', { p_nick: nick || 'Player' }, at);
       if (res && res.ok) applyGoogleLogin(res, email);
-      else toast('登录没成功，稍后再试', '⚠️');
-    } catch (e) { toast('连不上云端，检查一下网络', '📡'); }
+      else toast(LZ('登录没成功，稍后再试', "Couldn't sign in. Try again later."), '⚠️');
+    } catch (e) { toast(LZ('连不上云端，检查一下网络', "Can't reach the cloud. Check your network."), '📡'); }
   };
   function applyGoogleLogin(r, email) {
     const key = 'acct_g_' + r.uid;
@@ -613,7 +634,7 @@
     localStorage.setItem(DB_KEY, JSON.stringify(DB));
     closeSheet();
     savePullAndApply(true);
-    setTimeout(() => { toast('欢迎回来，' + S.nickname + '！', '🎉'); enterApp(); }, 150);
+    setTimeout(() => { toast(LZ('欢迎回来，' + S.nickname + '！', 'Welcome back, ' + S.nickname + '!'), '🎉'); enterApp(); }, 150);
   }
 
   function acctErrMsg(err, mode) {
