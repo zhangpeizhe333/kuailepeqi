@@ -1268,6 +1268,10 @@ button, .btn, .tab, .menu-row, .act { touch-action: manipulation; -webkit-tap-hi
 .tap-ava.fr::after { display: none; }
 
 
+/* ===== 顶部安全区：避开状态栏（时间/信号/电量），防止顶栏重叠 ===== */
+html, body { padding-top: env(safe-area-inset-top, 0px) !important; }
+.topbar { top: env(safe-area-inset-top, 0px) !important; }
+
 /* ===== 登录页：Apple / Google 社交按钮 + 「先逛逛」文字入口 ===== */
 .social-btns { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 12px; }
 .social-btns:empty { display: none; }
