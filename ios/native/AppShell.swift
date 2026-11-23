@@ -1,16 +1,20 @@
 import UIKit
 import WebKit
 import StoreKit
-import PhotosUI
 import AuthenticationServices
 
 /*
- * 快乐佩奇 iOS 版 · 网页壳 + StoreKit 2 内购 + Google OAuth 登录
+ * 快乐佩奇 iOS 版 · 网页壳 + StoreKit 2 内购 + Sign in with Apple + Google 登录
  *
- * App Store Connect 中创建 3 个内购商品（Product ID 必须完全一致）：
- *   订阅组（自动续订）：vip_month、vip_year
- *   非消耗型：vip_forever
- * Google 登录：Supabase OAuth（kuailepeqi://oauth 回调），无需 Google 原生 SDK
+ * 使用方式（Xcode）：
+ *   1. 新建 iOS App，Language = Swift，把本文件替换 AppDelegate.swift
+ *   2. Info.plist 需要的配置见 README-上架指南.md
+ *   3. 必须在 Apple Developer 后台给 App ID 打开 “Sign in with Apple” Capability，
+ *      并在 Xcode Target → Signing & Capabilities 添加该 Capability（会生成 entitlements）。
+ *   4. App Store Connect 中创建 3 个非消耗型内购商品（Product ID 必须完全一致）：
+ *        vip_month    ¥8      30 天会员
+ *        vip_year     ¥88     365 天会员
+ *        vip_forever  ¥188    永久会员
  */
 
 @main
@@ -27,8 +31,8 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         window.makeKeyAndVisible()
         self.window = window
         IAPManager.shared.webView = vc.webView
-        GoogleAuth.shared.webView = vc.webView
         IAPManager.shared.start()
+        AuthManager.shared.webView = vc.webView
         return true
     }
 }
@@ -38,9 +42,6 @@ final class ShellViewController: UIViewController, WKNavigationDelegate {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        // 与网页主体背景一致的深紫，安全区外露出的部分不突兀
-        view.backgroundColor = UIColor(red: 0x10/255.0, green: 0x0c/255.0, blue: 0x1e/255.0, alpha: 1)
-
         let cfg = WKWebViewConfiguration()
         cfg.preferences.isElementFullscreenEnabled = true
         cfg.allowsInlineMediaPlayback = true
@@ -48,28 +49,18 @@ final class ShellViewController: UIViewController, WKNavigationDelegate {
 
         let content = WKUserContentController()
         content.add(IAPScriptHandler.shared, name: "iap")
-        content.add(GoogleScriptHandler.shared, name: "google")
+        content.add(AuthScriptHandler.shared, name: "apple")
+        content.add(AuthScriptHandler.shared, name: "google")
         cfg.userContentController = content
 
         webView = WKWebView(frame: view.bounds, configuration: cfg)
         webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         webView.navigationDelegate = self
-        webView.uiDelegate = self
-        webView.scrollView.contentInsetAdjustmentBehavior = .never
-        webView.backgroundColor = view.backgroundColor
-        webView.isOpaque = false
         view.addSubview(webView)
 
-        // 页面完整落在安全区内：顶部避开状态栏/灵动岛，底部避开 Home 指示条
-        webView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-        ])
-
+        // App 审核期间可以指向线上 iOS 版；也可以打包本地 HTML（改成 Bundle 资源 URL）
         let url = URL(string: "https://zhangpeizhe333.github.io/kuailepeqi/ios/")!
+        // 每次冷启动都强制取最新 HTML/CSS，避免 CDN 缓存导致旧样式
         let req = URLRequest(url: url,
                              cachePolicy: .reloadIgnoringLocalAndRemoteCacheData,
                              timeoutInterval: 20)
@@ -90,97 +81,13 @@ final class ShellViewController: UIViewController, WKNavigationDelegate {
     }
 }
 
-extension ShellViewController: WKUIDelegate {
-    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
-                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
-        let a = UIAlertController(title: nil, message: message, preferredStyle: .alert)
-        a.addAction(UIAlertAction(title: "好", style: .default) { _ in completionHandler() })
-        present(a, animated: true)
-    }
-
-    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
-                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
-        let a = UIAlertController(title: nil, message: message, preferredStyle: .alert)
-        a.addAction(UIAlertAction(title: "好", style: .default) { _ in completionHandler(true) })
-        a.addAction(UIAlertAction(title: "取消", style: .cancel) { _ in completionHandler(false) })
-        present(a, animated: true)
-    }
-
-    func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String,
-                 defaultText: String?, initiatedByFrame frame: WKFrameInfo,
-                 completionHandler: @escaping (String?) -> Void) {
-        let a = UIAlertController(title: nil, message: prompt, preferredStyle: .alert)
-        a.addTextField { $0.text = defaultText }
-        a.addAction(UIAlertAction(title: "好", style: .default) { _ in completionHandler(a.textFields?.first?.text) })
-        a.addAction(UIAlertAction(title: "取消", style: .cancel) { _ in completionHandler(nil) })
-        present(a, animated: true)
-    }
-}
-
-/* ---------------- Google OAuth 登录（Supabase implicit flow） ---------------- */
-final class GoogleScriptHandler: NSObject, WKScriptMessageHandler {
-    static let shared = GoogleScriptHandler()
-
-    func userContentController(_ userContentController: WKUserContentController,
-                               didReceive message: WKScriptMessage) {
-        guard let body = message.body as? [String: Any],
-              let action = body["action"] as? String, action == "signIn" else { return }
-        DispatchQueue.main.async { GoogleAuth.shared.signIn() }
-    }
-}
-
-final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProviding {
-    static let shared = GoogleAuth()
-    weak var webView: WKWebView?
-    private var session: ASWebAuthenticationSession?
-
-    @MainActor
-    func signIn() {
-        guard let webView = webView else { return }
-        let redirect = "kuailepeqi://oauth"
-        let authorize = "https://urvoelbmqdlkbdicthlc.supabase.co/auth/v1/authorize?provider=google&redirect_to=" +
-            redirect.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
-        let s = ASWebAuthenticationSession(url: URL(string: authorize)!, callbackURLScheme: "kuailepeqi") { [weak self] callback, error in
-            DispatchQueue.main.async {
-                self?.session = nil
-                guard let url = callback else {
-                    let canceled = (error as NSError?)?.code == ASWebAuthenticationSessionError.canceledLogin.rawValue
-                    self?.sendJS("window.__googleResult({ok:false, err:'\(canceled ? "cancel" : "fail")'})")
-                    return
-                }
-                self?.deliver(url: url)
-            }
-        }
-        s.presentationContextProvider = self
-        session = s
-        if !s.start() {
-            sendJS("window.__googleResult({ok:false, err:'fail'})")
-        }
-    }
-
-    private func deliver(url: URL) {
-        guard let fragment = URLComponents(url: url, resolvingAgainstBaseURL: false)?.fragment else {
-            sendJS("window.__googleResult({ok:false, err:'fail'})"); return
-        }
-        let items = URLComponents(string: "?\(fragment)")?.queryItems ?? []
-        let at = items.first(where: { $0.name == "access_token" })?.value ?? ""
-        let rt = items.first(where: { $0.name == "refresh_token" })?.value ?? ""
-        guard !at.isEmpty, !rt.isEmpty else {
-            sendJS("window.__googleResult({ok:false, err:'fail'})"); return
-        }
-        sendJS("window.__googleResult({ok:true, session:{access_token:'\(at)',refresh_token:'\(rt)'}})")
-    }
-
-    private func sendJS(_ js: String) {
-        webView?.evaluateJavaScript(js, completionHandler: nil)
-    }
-
-    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        webView?.window ?? ASPresentationAnchor()
-    }
-}
-
-/* ---------------- JS ↔ Swift 桥：内购 ---------------- */
+/* ============================================================
+   JS ↔ Swift 桥
+   - iap    : window.webkit.messageHandlers.iap.postMessage({action:'buy'|'restore'|'prices', sku})
+   - apple  : ...messageHandlers.apple.postMessage({action:'signIn'})
+   - google : ...messageHandlers.google.postMessage({action:'signIn'})
+   回调统一写回 window.__iapResult / window.__appleResult / window.__googleResult
+   ============================================================ */
 final class IAPScriptHandler: NSObject, WKScriptMessageHandler {
     static let shared = IAPScriptHandler()
 
@@ -204,6 +111,176 @@ final class IAPScriptHandler: NSObject, WKScriptMessageHandler {
     }
 }
 
+final class AuthScriptHandler: NSObject, WKScriptMessageHandler {
+    static let shared = AuthScriptHandler()
+
+    func userContentController(_ userContentController: WKUserContentController,
+                               didReceive message: WKScriptMessage) {
+        guard let body = message.body as? [String: Any],
+              let action = body["action"] as? String, action == "signIn" else { return }
+        Task { @MainActor in
+            if message.name == "apple" {
+                AuthManager.shared.appleSignIn()
+            } else if message.name == "google" {
+                AuthManager.shared.googleSignIn()
+            }
+        }
+    }
+}
+
+/* ============================================================
+   登录管理：Sign in with Apple + Google（Supabase OAuth）
+   ============================================================ */
+final class AuthManager: NSObject,
+                         ASAuthorizationControllerDelegate,
+                         ASAuthorizationControllerPresentationContextProviding,
+                         ASWebAuthenticationPresentationContextProviding {
+    static let shared = AuthManager()
+    weak var webView: WKWebView?
+    private var authSession: ASWebAuthenticationSession?
+
+    // MARK: - Sign in with Apple
+    func appleSignIn() {
+        let provider = ASAuthorizationAppleIDProvider()
+        let request = provider.createRequest()
+        request.requestedScopes = [.fullName, .email]
+        let controller = ASAuthorizationController(authorizationRequests: [request])
+        controller.delegate = self
+        controller.presentationContextProvider = self
+        controller.performRequest()
+    }
+
+    func authorizationController(controller: ASAuthorizationController,
+                                 didCompleteWithAuthorization authorization: ASAuthorization) {
+        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+            notifyApple(["ok": false, "err": "unknown"])
+            return
+        }
+        let user = credential.user
+        let identityToken = String(data: credential.identityToken ?? Data(), encoding: .utf8) ?? ""
+
+        // Apple 只在「首次授权」返回 email / fullName，之后同一用户再次登录不会返回。
+        // 缓存到 UserDefaults，后续登录沿用，保证 H5 端拿得到邮箱做账号标识。
+        let email: String
+        if let e = credential.email, !e.isEmpty {
+            email = e
+            UserDefaults.standard.set(e, forKey: "kp_apple_email_" + user)
+        } else {
+            email = UserDefaults.standard.string(forKey: "kp_apple_email_" + user) ?? "Apple"
+        }
+
+        var name = ""
+        if let fullName = credential.fullName {
+            name = [fullName.givenName, fullName.familyName]
+                .compactMap { $0 }.joined(separator: " ")
+        }
+        if name.isEmpty {
+            name = UserDefaults.standard.string(forKey: "kp_apple_name_" + user) ?? ""
+        } else {
+            UserDefaults.standard.set(name, forKey: "kp_apple_name_" + user)
+        }
+
+        notifyApple([
+            "ok": true,
+            "user": user,
+            "idToken": identityToken,
+            "email": email,
+            "name": name,
+        ])
+    }
+
+    func authorizationController(controller: ASAuthorizationController,
+                                 didCompleteWithError error: Error) {
+        let nsError = error as NSError
+        if nsError.code == ASAuthorizationError.canceled.rawValue {
+            notifyApple(["ok": false, "err": "cancel"])
+        } else {
+            notifyApple(["ok": false, "err": "failed"])
+        }
+    }
+
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        return webView?.window ?? UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first(where: { $0.isKeyWindow }) ?? UIWindow()
+    }
+
+    // MARK: - Google（Supabase OAuth + ASWebAuthenticationSession）
+    func googleSignIn() {
+        let supabase = "https://urvoelbmqdlkbdicthlc.supabase.co"
+        let redirect = "kuailepeqi://auth-callback"
+        let encoded = redirect.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? redirect
+        let urlString = supabase + "/auth/v1/authorize?provider=google&redirect_to=" + encoded
+        guard let url = URL(string: urlString) else {
+            notifyGoogle(["ok": false, "err": "badurl"])
+            return
+        }
+        let session = ASWebAuthenticationSession(
+            url: url,
+            callbackURLScheme: "kuailepeqi"
+        ) { [weak self] callbackURL, error in
+            guard let self = self else { return }
+            if let error = error {
+                let ns = error as NSError
+                if ns.code == ASWebAuthenticationSessionError.canceledLogin.rawValue {
+                    self.notifyGoogle(["ok": false, "err": "cancel"])
+                } else {
+                    self.notifyGoogle(["ok": false, "err": "failed"])
+                }
+                return
+            }
+            guard let cb = callbackURL,
+                  let fragment = cb.fragment else {
+                self.notifyGoogle(["ok": false, "err": "nofragment"])
+                return
+            }
+            let params = self.parseQuery(fragment)
+            guard let token = params["access_token"] else {
+                self.notifyGoogle(["ok": false, "err": "notoken"])
+                return
+            }
+            // H5 的 __googleResult 走 session.access_token 分支
+            self.notifyGoogle(["ok": true, "session": ["access_token": token]])
+        }
+        session.presentationContextProvider = self
+        session.prefersEphemeralWebBrowserSession = false
+        self.authSession = session
+        session.start()
+    }
+
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        return webView?.window ?? UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first(where: { $0.isKeyWindow }) ?? UIWindow()
+    }
+
+    // MARK: - 工具
+    private func parseQuery(_ query: String) -> [String: String] {
+        var result: [String: String] = [:]
+        for pair in query.split(separator: "&") {
+            let kv = pair.split(separator: "=", maxSplits: 1)
+            if kv.count == 2 {
+                let key = String(kv[0])
+                let value = String(kv[1]).removingPercentEncoding ?? String(kv[1])
+                result[key] = value
+            }
+        }
+        return result
+    }
+
+    private func js(_ function: String, _ dict: [String: Any]) {
+        guard let webView = webView else { return }
+        let data = try? JSONSerialization.data(withJSONObject: dict, options: [])
+        let json = String(data: data ?? Data(), encoding: .utf8) ?? "{}"
+        webView.evaluateJavaScript("\(function)(\(json))", completionHandler: nil)
+    }
+
+    private func notifyApple(_ dict: [String: Any]) { js("window.__appleResult", dict) }
+    private func notifyGoogle(_ dict: [String: Any]) { js("window.__googleResult", dict) }
+}
+
 @available(iOS 15.0, *)
 final class IAPManager {
     static let shared = IAPManager()
@@ -216,7 +293,6 @@ final class IAPManager {
         "vip_year": (365, "1 年"),
         "vip_forever": (36500, "永久"),
     ]
-    private let skus = ["vip_month", "vip_year", "vip_forever"]
 
     func start() {
         guard #available(iOS 15.0, *) else { return }
@@ -232,30 +308,11 @@ final class IAPManager {
         }
     }
 
-    /// 页面启动时调用：回填 App Store 本地化价格（每个地区自动显示当地货币）
-    @available(iOS 15.0, *)
-    func prices() async {
-        do {
-            let products = try await Product.products(for: skus)
-            guard !products.isEmpty else { return } // 商品未配置时不覆盖页面默认价
-            var map: [String: String] = [:]
-            for p in products { map[p.id] = p.displayPrice }
-            guard let data = try? JSONSerialization.data(withJSONObject: map),
-                  let json = String(data: data, encoding: .utf8) else { return }
-            await MainActor.run {
-                webView?.evaluateJavaScript("window.__iapPrices && window.__iapPrices(\(json))", completionHandler: nil)
-            }
-        } catch { /* 价格拿不到就维持页面默认，不干扰购买 */ }
-    }
-
     @available(iOS 15.0, *)
     func buy(sku: String) async {
         do {
             let products = try await Product.products(for: [sku])
-            guard let product = products.first else {
-                notify(type: "error", msg: "会员商品还没就绪（App Store 正在处理），过几分钟再试")
-                return
-            }
+            guard let product = products.first else { notify(type: "error"); return }
             let result = try await product.purchase()
             switch result {
             case .success(let verification):
@@ -263,17 +320,15 @@ final class IAPManager {
                     await transaction.finish()
                     notify(type: "bought", sku: sku, tx: String(transaction.id))
                 } else {
-                    notify(type: "error", msg: "购买校验没通过，没有扣款，请再试一次")
+                    notify(type: "error")
                 }
             case .userCancelled:
                 notify(type: "cancel")
-            case .pending:
-                notify(type: "error", msg: "购买待家长/账号批准，批准后自动生效")
             default:
-                notify(type: "error", msg: "购买没成功，请再试一次")
+                notify(type: "error")
             }
         } catch {
-            notify(type: "error", msg: "购买没成功，请检查网络后再试")
+            notify(type: "error")
         }
     }
 
@@ -290,22 +345,36 @@ final class IAPManager {
             }
             if found == 0 { notify(type: "empty") }
         } catch {
-            notify(type: "error", msg: "恢复购买没成功，请检查网络后再试")
+            notify(type: "error")
+        }
+    }
+
+    @available(iOS 15.0, *)
+    func prices() async {
+        do {
+            let products = try await Product.products(for: Array(plans.keys))
+            var map: [String: String] = [:]
+            for p in products {
+                map[p.id] = p.displayPrice
+            }
+            guard let webView = webView else { return }
+            let data = try? JSONSerialization.data(withJSONObject: map, options: [])
+            let json = String(data: data ?? Data(), encoding: .utf8) ?? "{}"
+            webView.evaluateJavaScript("window.__iapPrices(\(json))", completionHandler: nil)
+        } catch {
+            // 价格拉取失败不影响购买
         }
     }
 
     /// 通知网页：window.KKIAP.callback({...}) → 页面 __iapResult → 开通/提示
-    private func notify(type: String, sku: String = "", tx: String = "", msg: String = "") {
+    private func notify(type: String, sku: String = "", tx: String = "") {
         guard let webView = webView else { return }
-        let days = plans[sku]?.days ?? 0
         let js: String
         switch type {
         case "bought", "restored":
-            js = String(format: "KKIAP.callback({type:'%@',sku:'%@',tx:'%@',days:%d})",
-                        type, sku, tx, days)
+            js = String(format: "KKIAP.callback({type:'%@',sku:'%@',tx:'%@'})", type, sku, tx)
         default:
-            let m = msg.replacingOccurrences(of: "'", with: "\\'")
-            js = String(format: "KKIAP.callback({type:'%@',msg:'%@'})", type, m)
+            js = String(format: "KKIAP.callback({type:'%@'})", type)
         }
         webView.evaluateJavaScript(js, completionHandler: nil)
     }
