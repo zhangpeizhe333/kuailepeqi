@@ -38,6 +38,7 @@ targets:
     settings:
       base:
         INFOPLIST_FILE: Info.plist          # 直接引用手写的 Info.plist（不要用 info:，那会覆盖它）
+        CODE_SIGN_ENTITLEMENTS: KuailePeqi.entitlements   # Sign in with Apple capability
         PRODUCT_BUNDLE_IDENTIFIER: com.zhangpeizhe.kuailepeqi
         DEVELOPMENT_TEAM: TEAM_ID_PLACEHOLDER
         CODE_SIGN_STYLE: Automatic
