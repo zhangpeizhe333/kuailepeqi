@@ -435,6 +435,8 @@
     '登录后可在不同手机找回记录': 'Sign in to restore your streak on any phone',
     '注销账号': 'Delete account',
     '清除全部数据': 'Clear all data',
+    '管理账号 · 修改密码 · 注销': 'Manage account · Password · Delete',
+    '当前账号：': 'Signed in as ',
     '请在 App Store 版本中恢复购买': 'Restore purchases inside the App Store version',
     '请在 Google Play 版本中购买': 'Purchase inside the Google Play version',
     '请在 Google Play 版本中恢复购买': 'Restore purchases inside the Google Play version',

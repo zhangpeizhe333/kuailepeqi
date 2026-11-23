@@ -812,15 +812,15 @@
     };
   }
   function accountSheet() {
-    if (!S || !S.acct) return openAcctLogin();
+    if (!S) return;
     sheet(`<h3>${LZ('🔑 我的账号', '🔑 My Account')}</h3>
       <p class="sheet-sub">${LZ('当前账号：' + esc(S.acct) + ' · 换手机登录这个账号就能找回记录', 'Signed in as ' + esc(S.acct) + ' · sign in on a new phone to restore your data')}</p>
       <div class="sheet-actions col">
-        <button class="btn btn-primary btn-lg" id="acctPwd">${LZ('修改密码', 'Change password')}</button>
+        ${S.acct ? `<button class="btn btn-primary btn-lg" id="acctPwd">${LZ('修改密码', 'Change password')}</button>` : ''}
         <button class="btn btn-danger" id="acctDel">${LZ('注销账号', 'Delete account')}</button>
       </div>
       <p class="muted tiny" style="text-align:center;margin-top:10px">${LZ('注销后账号、打卡记录、帖子、聊天记录全部删除，无法恢复', 'This permanently deletes your account, check-ins, posts and chats. It cannot be undone.')}</p>`);
-    $('#acctPwd').onclick = acctChangePass;
+    if ($('#acctPwd')) $('#acctPwd').onclick = acctChangePass;
     $('#acctDel').onclick = acctDelete;
   }
 
@@ -4157,19 +4157,18 @@
           <button class="menu-row" id="mFriends"><span>👥</span><div><b>游戏好友</b><small>搜昵称加好友，看对方坚持了多久</small></div></button>
           <button class="menu-row" id="mShare"><span>🔗</span><div><b>分享链接</b><small>复制网页链接或安装包链接</small></div></button>
           <button class="menu-row" id="mVip"><span>🎫</span><div><b>会员中心</b><small>${vipOn() ? '已开通 · 还剩 ' + vipLeftDays() + ' 天' : '购买会员开通'}</small></div></button>
-          ${S.acct && !S.g ? `<button class="menu-row" id="mAccount"><span>🔑</span><div><b>我的账号</b><small>${esc(S.acct)} · 换手机可找回记录</small></div></button>` : ''}
-          ${S.acct ? '' : `<button class="menu-row" id="mAccount"><span>🔑</span><div><b>账号密码登录</b><small>登录后换手机也能找回打卡记录</small></div></button>`}
+          ${S.acct && !S.g ? `<button class="menu-row" id="mAccount"><span>🔑</span><div><b>我的账号</b><small>${LZ('管理账号 · 修改密码 · 注销', 'Manage account · Password · Delete')}</small></div></button>` : ''}
+          ${!(S.acct && !S.g) ? `<button class="menu-row" id="mAccount"><span>🔑</span><div><b>我的账号</b><small>${LZ('管理账号 · 修改密码 · 注销', 'Manage account · Password · Delete')}</small></div></button>` : ''}
           ${new URLSearchParams(location.search).has('sync') ? `<button class="menu-row" id="mSync"><span>☁️</span><div><b>云同步</b><small>同步状态诊断（调试入口）</small></div></button>` : ''}
           ${S.acct ? '' : `<button class="menu-row" id="mRecCode"><span>🛟</span><div><b>存档找回码</b><small>${S.recCode ? esc(S.recCode) : '重装 / 换手机后凭码找回这份记录'}</small></div></button>`}
           <button class="menu-row" id="mContact"><span>✉️</span><div><b>联系我们</b><small>Zhangpeizhe333@gmail.com</small></div></button>
           <button class="menu-row" id="mLang"><span>🌐</span><div><b>${EN ? 'Language' : '语言'}</b><small>${EN ? 'English · Chinese' : '中文 · 英文'}</small></div></button>
-          <button class="menu-row" id="mDeleteAcct"><span>👤</span><div><b>注销账号</b><small>清除全部数据</small></div></button>
           <button class="menu-row danger" id="mLogout"><span>🚪</span><div><b>退出登录</b><small>记录会保留，可重新登录</small></div></button>
         </div>`);
       $('#mShare').onclick = shareSheet;
       $('#mVip').onclick = vipSheet;
       const mac = $('#mAccount');
-      if (mac) mac.onclick = () => { if (S.acct) accountSheet(); else openAcctLogin(); };
+      if (mac) mac.onclick = () => { closeSheet(); setTimeout(accountSheet, 120); };
       const ms = $('#mSync');
       if (ms) ms.onclick = syncSheet;
       const mrc = $('#mRecCode');
@@ -4178,7 +4177,6 @@
       $('#mContact').onclick = contactSheet;
       const ml = $('#mLang');
       if (ml && window.KKI18N) ml.onclick = () => KKI18N.sheet(sheet, closeSheet);
-      const mdel = $('#mDeleteAcct'); if (mdel) mdel.onclick = () => { closeSheet(); setTimeout(acctDelete, 120); };
       $('#mLogout').onclick = logout;
     });
     $('#musicBtn').addEventListener('click', () => {
