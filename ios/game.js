@@ -637,6 +637,103 @@
     setTimeout(() => { toast(LZ('欢迎回来，' + S.nickname + '！', 'Welcome back, ' + S.nickname + '!'), '🎉'); enterApp(); }, 150);
   }
 
+  /* ---------------- Sign in with Apple（iOS 原生 AuthenticationServices） ---------------- */
+  function appleBridge() {
+    return (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apple) ? 'ios' : null;
+  }
+  let appleBusy = false;
+  function appleSignIn() {
+    if (appleBusy || !appleBridge()) return;
+    appleBusy = true;
+    try { window.webkit.messageHandlers.apple.postMessage({ action: 'signIn' }); }
+    catch (e) { appleBusy = false; toast(LZ('Apple 登录打不开，稍后再试', "Can't open Sign in with Apple — try again later"), '⚠️'); }
+  }
+  /* 原生回调：{ok:true, idToken, email, name, user} / {ok:false, err:'cancel'|...} */
+  window.__appleResult = async function (r) {
+    appleBusy = false;
+    if (!r || !r.ok) {
+      if (r && r.err === 'cancel') toast(LZ('已取消', 'Cancelled'), 'ℹ️');
+      else toast(LZ('Apple 登录失败，可以改用账号密码登录', 'Apple sign-in failed — try account login instead'), '⚠️');
+      return;
+    }
+    try {
+      let at = '', email = r.email || 'Apple', nick = String(r.name || '').slice(0, 12);
+      if (r.idToken) {
+        const ex = await fetch(SB_URL + '/auth/v1/token?grant_type=id_token', {
+          method: 'POST',
+          headers: { apikey: SB_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: 'apple', id_token: r.idToken }),
+        }).then((x) => x.json());
+        if (!ex || !ex.access_token) { toast(LZ('Apple 登录失败，可以改用账号密码登录', 'Apple sign-in failed — try account login instead'), '⚠️'); return; }
+        at = ex.access_token;
+        const u = ex.user || {};
+        email = u.email || email;
+        const md = u.user_metadata || {};
+        nick = String(md.full_name || md.name || nick || '').slice(0, 12);
+      } else { toast(LZ('Apple 登录失败，可以改用账号密码登录', 'Apple sign-in failed — try account login instead'), '⚠️'); return; }
+      /* 优先 apple 专用 RPC；未部署时回退到已上线的 google 登录 RPC（同样按 auth.uid 识别） */
+      let res = await sbRpc('pk_login_apple', { p_nick: nick || 'Player' }, at).catch(() => null);
+      if (!res || !res.ok) res = await sbRpc('pk_login_google', { p_nick: nick || 'Player' }, at).catch(() => null);
+      if (res && res.ok) applySocialLogin(res, email, 'apple');
+      else toast(LZ('登录没成功，稍后再试', "Couldn't sign in. Try again later."), '⚠️');
+    } catch (e) { toast(LZ('连不上云端，检查一下网络', "Can't reach the cloud. Check your network."), '📡'); }
+  };
+  /* Google 与 Apple 共用的落地：区分本地 key 前缀，保留原有恢复/拉取逻辑 */
+  function applySocialLogin(r, email, provider) {
+    const key = (provider === 'apple' ? 'acct_a_' : 'acct_g_') + r.uid;
+    let acc = DB.accounts[key];
+    if (!acc) {
+      acc = fixSave(freshSave());
+      acc.wx = { wxid: key, nick: r.nickname || 'Player' };
+      acc.nickname = r.nickname || 'Player';
+      acc.avatar = r.avatar || '🐷';
+      restoreDays(acc, r);
+    }
+    acc.acct = email || provider;
+    acc.g = true;
+    acc.provider = provider;
+    acc.cloud = { uid: r.uid, token: r.token };
+    DB.accounts[key] = acc;
+    DB.current = key;
+    S = acc;
+    localStorage.setItem(DB_KEY, JSON.stringify(DB));
+    closeSheet();
+    savePullAndApply(true);
+    setTimeout(() => { toast(LZ('欢迎回来，' + S.nickname + '！', 'Welcome back, ' + S.nickname + '!'), '🎉'); enterApp(); }, 150);
+  }
+  /* Google 登录也走统一的落地函数 */
+  function applyGoogleLogin(r, email) { applySocialLogin(r, email, 'google'); }
+  /* 登录页社交按钮：Apple + Google 直接排在登录卡片里；原生桥不存在时对应按钮自动隐藏 */
+  function renderLoginSocial() {
+    const wrap = $('#socialBtns');
+    if (!wrap) return;
+    const gSVG = '<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+    const aSVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M17.05 12.54c-.03-2.6 2.12-3.85 2.22-3.91-1.21-1.77-3.1-2.01-3.77-2.03-1.6-.16-3.13.94-3.95.94-.82 0-2.08-.92-3.42-.9-1.76.02-3.38 1.02-4.28 2.59-1.83 3.17-.47 7.86 1.31 10.43.87 1.26 1.91 2.67 3.27 2.62 1.31-.05 1.81-.85 3.39-.85 1.58 0 2.03.85 3.41.82 1.41-.02 2.3-1.28 3.16-2.55.99-1.46 1.4-2.87 1.42-2.94-.03-.01-2.72-1.04-2.76-4.22zM14.62 4.9c.72-.87 1.21-2.08 1.08-3.28-1.04.04-2.3.7-3.05 1.57-.67.77-1.26 2-1.1 3.18 1.16.09 2.35-.59 3.07-1.47z"/></svg>';
+    let html = '';
+    if (appleBridge()) html += '<button class="btn btn-apple btn-lg" id="appleLoginBtn">' + aSVG + '<span>' + LZ('用 Apple 登录', 'Sign in with Apple') + '</span></button>';
+    if (googleBridge()) html += '<button class="btn btn-google btn-lg" id="googleLoginBtn">' + gSVG + '<span>' + LZ('用 Google 账号继续', 'Continue with Google') + '</span></button>';
+    wrap.innerHTML = html;
+    if (appleBridge()) $('#appleLoginBtn').onclick = appleSignIn;
+    if (googleBridge()) $('#googleLoginBtn').onclick = googleSignIn;
+  }
+  /* 覆盖 GOOGLE_JS_IOS 里的同名函数：Google 按钮不再塞进账号弹窗 */
+  function initGoogleBtn() { renderLoginSocial(); }
+  /* “先逛逛，稍后再登录”：不登录直接进入，复用本机已有游客存档，没有就新建一个 */
+  function guestEnter() {
+    const ids = Object.keys(DB.accounts).filter((id) => !id.startsWith('acct_'));
+    if (ids.length) {
+      S = fixSave(DB.accounts[ids[0]]); DB.current = ids[0];
+    } else {
+      const key = 'wx_' + Date.now().toString(36);
+      S = fixSave(freshSave());
+      S.wx = { wxid: key, nick: '玩家' };
+      S.nickname = '玩家';
+      DB.accounts[key] = S; DB.current = key;
+    }
+    persist(); closeSheet();
+    setTimeout(enterApp, 120);
+  }
+
   function acctErrMsg(err, mode) {
     const map = {
       user_taken: '这个账号已经被注册了，换一个吧',
@@ -650,7 +747,6 @@
   function openAcctLogin(prefill) {
     sheet(`<h3>🔑 账号登录</h3>
       <p class="sheet-sub">登录后换手机、换浏览器也能找回打卡记录</p>
-      <div id="googleWrap"></div>
       <div class="seg" id="acctMode">
         <button class="seg-b active" data-m="login">登录</button>
         <button class="seg-b" data-m="reg">注册新账号</button>
@@ -691,7 +787,6 @@
       } catch (e) { go.disabled = false; toast('连不上云端，检查一下网络', '📡'); }
     };
     go.onclick = submit;
-    initGoogleBtn();
     $('#acctPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
   }
   function acctChangePass() {
@@ -722,7 +817,7 @@
       <p class="sheet-sub">${LZ('当前账号：' + esc(S.acct) + ' · 换手机登录这个账号就能找回记录', 'Signed in as ' + esc(S.acct) + ' · sign in on a new phone to restore your data')}</p>
       <div class="sheet-actions col">
         <button class="btn btn-primary btn-lg" id="acctPwd">${LZ('修改密码', 'Change password')}</button>
-        <button class="btn btn-danger" id="acctDel">${LZ('注销账号并删除全部数据', 'Delete account and all data')}</button>
+        <button class="btn btn-danger" id="acctDel">${LZ('注销账号', 'Delete account')}</button>
       </div>
       <p class="muted tiny" style="text-align:center;margin-top:10px">${LZ('注销后账号、打卡记录、帖子、聊天记录全部删除，无法恢复', 'This permanently deletes your account, check-ins, posts and chats. It cannot be undone.')}</p>`);
     $('#acctPwd').onclick = acctChangePass;
@@ -2941,37 +3036,31 @@
   };
   if (window.KKIAP && window.KKIAP.available() && window.KKIAP.prices) window.KKIAP.prices();
 
-  /* ---------------- 会员 · 激活码 ---------------- */
-  const VIP_ALPHA = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const VIP_SALT = 'kuailepeqi-2026-peizhe';
-  const VIP_PLAN_DAYS = [7, 30, 90, 180, 365, 36500];
-  const VIP_PLAN_NAME = ['7 天', '30 天', '90 天', '180 天', '365 天', '长期'];
+  /* ---------------- 会员 · 仅 App Store 内购 ---------------- */
+  function vipInputSheet() {
+    sheet(`<h3>🎫 陪伴会员</h3>
+      <p class="sheet-sub">${LZ('选择方案，通过 App Store 安全购买', 'Choose a plan and buy securely in the App Store')}</p>
+      <div class="vip-price" id="vipBuy">
+        <button class="vip-buy" data-sku="vip_month"><b>¥8</b><small>/ 月</small></button>
+        <button class="vip-buy" data-sku="vip_year"><b>¥88</b><small>/ 年</small></button>
+        <button class="vip-buy" data-sku="vip_forever"><b>¥188</b><small>/ 永久</small></button>
+      </div>
+      <div class="vip-perk">
+        <div><span>📝</span><b>${LZ('每天免费抽 1 张小纸条', '1 free note every day')}</b></div>
+        <div><span>📅</span><b>${LZ('可自行设置打卡开始时间', 'Set your own start date')}</b></div>
+        <div><span>🖊️</span><b>${LZ('忘了打卡？随时补签', 'Missed a day? Make it up anytime')}</b></div>
+        <div><span>🗣️</span><b>${LZ('社区里尊贵红名，字体更亮眼', 'VIP name color in the community')}</b></div>
+      </div>
+      <div class="sheet-actions col" style="margin-top:12px">
+        <button class="btn btn-ghost btn-lg" id="vipRestore2">${LZ('恢复购买', 'Restore purchases')}</button>
+        <button class="btn btn-ghost btn-lg" id="vipCancel">${LZ('先看看', 'Just looking')}</button>
+      </div>
+      <p class="muted tiny" style="text-align:center;margin-top:10px">${LZ('在 App Store 内购买，安全便捷', 'Purchase securely inside the App Store')}</p>`);
+    $('#vipBuy .vip-buy').forEach((b) => { b.onclick = () => iapBuy(b.dataset.sku); });
+    $('#vipRestore2').onclick = iapRestore;
+    $('#vipCancel').onclick = closeSheet;
+  }
 
-  function vipHash(str) {
-    let h = 2166136261 >>> 0;
-    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
-    return h >>> 0;
-  }
-  /* 校验位：由「套餐 + 随机序号」推出 4 位字符，客户端离线也能验真假 */
-  function vipSign(payload) {
-    let h = vipHash(VIP_SALT + '|' + payload), out = '';
-    for (let i = 0; i < 4; i++) {
-      h = (Math.imul(h, 1103515245) + 12345) >>> 0;
-      out += VIP_ALPHA[(h >>> 15) % 32];
-    }
-    return out;
-  }
-  function vipParse(raw) {
-    const s = String(raw || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
-    const body = s.indexOf('KP') === 0 ? s.slice(2) : s;
-    if (body.length !== 10) return null;
-    for (let i = 0; i < body.length; i++) if (VIP_ALPHA.indexOf(body[i]) < 0) return null;
-    const payload = body.slice(0, 6), sign = body.slice(6);
-    const pi = VIP_ALPHA.indexOf(payload[0]);
-    if (pi < 0 || pi >= VIP_PLAN_DAYS.length) return null;
-    if (vipSign(payload) !== sign) return null;
-    return { days: VIP_PLAN_DAYS[pi], plan: VIP_PLAN_NAME[pi] };
-  }
   function vipOn() { return !!(S.vip && S.vip.until > Date.now()); }
   function vipLeftDays() { return vipOn() ? Math.ceil((S.vip.until - Date.now()) / DAY) : 0; }
   /* 会员每天第一次抽纸条免费 */
@@ -2990,7 +3079,7 @@
           <div><b>${esc(S.vip.plan || '会员')} · 生效中</b>
           <small>有效期至 ${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 · ${leftTxt}</small></div>
         </div>
-        <p class="muted tiny" style="text-align:center;margin:10px 0 0">续费方案见下方 · 兑换码由活动发放</p>
+        <p class="muted tiny" style="text-align:center;margin:10px 0 0">在 App Store 内购买，安全便捷</p>
         <div class="vip-perk">
           <div><span>📝</span><b>每天免费抽 1 张小纸条</b></div>
           <div><span>📅</span><b>可自行设置打卡开始时间</b></div>
@@ -3000,12 +3089,10 @@
         <div class="sheet-actions col" style="margin-top:14px">
           <button class="btn btn-ghost btn-lg" id="vipStart">📅 设置打卡开始时间</button>
           <button class="btn btn-ghost btn-lg" id="vipMakeup">🖊️ 补签打卡</button>
-          <button class="btn btn-ghost btn-lg" id="vipAdd">输入兑换码续期</button>
           <button class="btn btn-ghost btn-lg" id="vipRestore">恢复购买</button>
           <button class="btn btn-primary btn-lg" id="vipOk">知道啦</button>
         </div>`);
       $('#vipOk').onclick = closeSheet;
-      $('#vipAdd').onclick = () => vipInputSheet(true);
       $('#vipRestore').onclick = iapRestore;
       $('#vipStart').onclick = vipStartSheet;
       $('#vipMakeup').onclick = vipMakeupSheet;
@@ -3014,77 +3101,6 @@
     vipInputSheet(false);
   }
 
-  function vipInputSheet(hasCode) {
-    sheet(`<h3>🎫 陪伴会员</h3>
-      <p class="sheet-sub">${hasCode ? '再输一个新兑换码可续期叠加（每个码只能用一次）' : '每个兑换码只能用一次，兑换后立即生效'}</p>
-      <div class="vip-price" id="vipBuy">
-        <button class="vip-buy" data-sku="vip_month"><b>¥8</b><small>/ 月</small></button>
-        <button class="vip-buy" data-sku="vip_year"><b>¥88</b><small>/ 年</small></button>
-        <button class="vip-buy" data-sku="vip_forever"><b>¥188</b><small>/ 永久</small></button>
-      </div>
-      <div class="vip-perk">
-        <div><span>📝</span><b>每天免费抽 1 张小纸条</b></div>
-        <div><span>📅</span><b>可自行设置打卡开始时间</b></div>
-        <div><span>🖊️</span><b>忘了打卡？随时补签</b></div>
-        <div><span>🗣️</span><b>社区里尊贵红名，字体更亮眼</b></div>
-      </div>
-      <input class="vip-input" id="vipCode" placeholder="KP-XXXXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false">
-      <div class="sheet-actions col" style="margin-top:12px">
-        <button class="btn btn-primary btn-lg" id="vipAct">兑换会员</button>
-        <button class="btn btn-ghost btn-lg" id="vipRestore2">恢复购买</button>
-        <button class="btn btn-ghost btn-lg" id="vipCancel">${hasCode ? '先不续' : '先看看'}</button>
-      </div>
-      <p class="muted tiny" style="text-align:center;margin-top:10px">兑换码由活动发放 · 也可以直接点上方方案购买</p>`);
-
-    const act = async () => {
-      const el = $('#vipCode');
-      const r = vipParse(el.value);
-      if (!r) {
-        el.classList.add('shake');
-        setTimeout(() => el.classList.remove('shake'), 600);
-        return toast('激活码不对，检查一下有没有输错', '⚠️');
-      }
-      const norm = String(el.value).toUpperCase().replace(/[^0-9A-Z]/g, '');
-      /* 本机已用过的码，直接拒绝，不再请求云端 */
-      if (S.vip && S.vip.code === norm) {
-        el.classList.add('shake');
-        setTimeout(() => el.classList.remove('shake'), 600);
-        return toast('这个激活码你已经用过了，每个码只能用一次', '🚫');
-      }
-      const btn = $('#vipAct');
-      btn.disabled = true;
-      try {
-        /* 一码一用：先在云端核销（用过就失效），成功才开通 */
-        await sbSync().catch(() => {});
-        logCloudPull().catch(() => {});
-        const c = cloudId();
-        const res = await sbRpc('pk_code_redeem', { p_uid: c.uid, p_token: c.token, p_code: norm });
-        if (res && res.ok) {
-          const base = Math.max(Date.now(), (S.vip && S.vip.until) || 0);
-          S.vip = { until: base + r.days * DAY, code: norm, plan: r.plan };
-          S.vipFree = { d: '', used: false };
-          persist();
-          render();
-          toast(`开通成功，${r.plan}会员已生效`, '🎉');
-          setTimeout(vipSheet, 500);
-        } else if (res && res.err === 'used') {
-          el.classList.add('shake');
-          setTimeout(() => el.classList.remove('shake'), 600);
-          toast('这个激活码已经被用过了，每个码只能用一次', '🚫');
-        } else {
-          toast('激活失败，稍后再试', '⚠️');
-        }
-      } catch (err) {
-        toast('连不上云端，激活失败，检查网络', '📡');
-      }
-      btn.disabled = false;
-    };
-    $('#vipAct').onclick = act;
-    $('#vipCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') act(); });
-    $$('#vipBuy .vip-buy').forEach((b) => { b.onclick = () => iapBuy(b.dataset.sku); });
-    $('#vipRestore2').onclick = iapRestore;
-    $('#vipCancel').onclick = closeSheet;
-  }
 
   /* ---------------- 自绘日历 ---------------- */
   const CAL_W = ['日', '一', '二', '三', '四', '五', '六'];
@@ -4116,7 +4132,8 @@
     const sr = $('#sheetRoot');
     if (sr) sr.addEventListener('click', (e) => { if (uiBlocked()) { e.stopPropagation(); e.preventDefault(); } }, true);
     $('#pekiIco').innerHTML = QuitArt.pekiAvatar();
-    $('#wxLogin').addEventListener('click', openWxAuth);
+    const gl = $('#guestLogin'); if (gl) gl.onclick = guestEnter;
+    renderLoginSocial();
     const acl = $('#acctLogin');
     if (acl) acl.addEventListener('click', () => openAcctLogin());
     $$('.tab').forEach((b) => b.addEventListener('click', () => {
@@ -4139,13 +4156,14 @@
         <div class="menu-list">
           <button class="menu-row" id="mFriends"><span>👥</span><div><b>游戏好友</b><small>搜昵称加好友，看对方坚持了多久</small></div></button>
           <button class="menu-row" id="mShare"><span>🔗</span><div><b>分享链接</b><small>复制网页链接或安装包链接</small></div></button>
-          <button class="menu-row" id="mVip"><span>🎫</span><div><b>会员中心</b><small>${vipOn() ? '已开通 · 还剩 ' + vipLeftDays() + ' 天' : '购买或兑换开通'}</small></div></button>
+          <button class="menu-row" id="mVip"><span>🎫</span><div><b>会员中心</b><small>${vipOn() ? '已开通 · 还剩 ' + vipLeftDays() + ' 天' : '购买会员开通'}</small></div></button>
           ${S.acct && !S.g ? `<button class="menu-row" id="mAccount"><span>🔑</span><div><b>我的账号</b><small>${esc(S.acct)} · 换手机可找回记录</small></div></button>` : ''}
           ${S.acct ? '' : `<button class="menu-row" id="mAccount"><span>🔑</span><div><b>账号密码登录</b><small>登录后换手机也能找回打卡记录</small></div></button>`}
           ${new URLSearchParams(location.search).has('sync') ? `<button class="menu-row" id="mSync"><span>☁️</span><div><b>云同步</b><small>同步状态诊断（调试入口）</small></div></button>` : ''}
           ${S.acct ? '' : `<button class="menu-row" id="mRecCode"><span>🛟</span><div><b>存档找回码</b><small>${S.recCode ? esc(S.recCode) : '重装 / 换手机后凭码找回这份记录'}</small></div></button>`}
           <button class="menu-row" id="mContact"><span>✉️</span><div><b>联系我们</b><small>Zhangpeizhe333@gmail.com</small></div></button>
           <button class="menu-row" id="mLang"><span>🌐</span><div><b>${EN ? 'Language' : '语言'}</b><small>${EN ? 'English · Chinese' : '中文 · 英文'}</small></div></button>
+          <button class="menu-row" id="mDeleteAcct"><span>👤</span><div><b>注销账号</b><small>清除全部数据</small></div></button>
           <button class="menu-row danger" id="mLogout"><span>🚪</span><div><b>退出登录</b><small>记录会保留，可重新登录</small></div></button>
         </div>`);
       $('#mShare').onclick = shareSheet;
@@ -4160,6 +4178,7 @@
       $('#mContact').onclick = contactSheet;
       const ml = $('#mLang');
       if (ml && window.KKI18N) ml.onclick = () => KKI18N.sheet(sheet, closeSheet);
+      const mdel = $('#mDeleteAcct'); if (mdel) mdel.onclick = () => { closeSheet(); setTimeout(acctDelete, 120); };
       $('#mLogout').onclick = logout;
     });
     $('#musicBtn').addEventListener('click', () => {
