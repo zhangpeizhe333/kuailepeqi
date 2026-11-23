@@ -147,7 +147,7 @@ final class AuthManager: NSObject,
         let controller = ASAuthorizationController(authorizationRequests: [request])
         controller.delegate = self
         controller.presentationContextProvider = self
-        controller.performRequest()
+        controller.performRequests()
     }
 
     func authorizationController(controller: ASAuthorizationController,
