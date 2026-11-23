@@ -814,9 +814,9 @@
   function accountSheet() {
     if (!S) return;
     sheet(`<h3>${LZ('🔑 我的账号', '🔑 My Account')}</h3>
-      <p class="sheet-sub">${LZ('当前账号：' + esc(S.acct) + ' · 换手机登录这个账号就能找回记录', 'Signed in as ' + esc(S.acct) + ' · sign in on a new phone to restore your data')}</p>
+      ${(() => { let wl; if (S.g) { const pv = S.provider === 'google' ? LZ('Google 账号', 'Google account') : LZ('Apple 账号', 'Apple account'); wl = (S.nickname ? esc(S.nickname) + ' · ' : '') + pv; } else { wl = esc(S.acct || LZ('本机存档', 'Local save')); } return `<p class="sheet-sub">${LZ('当前账号：' + wl + ' · 换手机登录这个账号就能找回记录', 'Signed in as ' + wl + ' · sign in on a new phone to restore your data')}</p>`; })()}
       <div class="sheet-actions col">
-        ${S.acct ? `<button class="btn btn-primary btn-lg" id="acctPwd">${LZ('修改密码', 'Change password')}</button>` : ''}
+        ${(!S.g && S.acct) ? `<button class="btn btn-primary btn-lg" id="acctPwd">${LZ('修改密码', 'Change password')}</button>` : ''}
         <button class="btn btn-danger" id="acctDel">${LZ('注销账号', 'Delete account')}</button>
       </div>
       <p class="muted tiny" style="text-align:center;margin-top:10px">${LZ('注销后账号、打卡记录、帖子、聊天记录全部删除，无法恢复', 'This permanently deletes your account, check-ins, posts and chats. It cannot be undone.')}</p>`);
